@@ -89,6 +89,7 @@ type Verification struct {
 	ExpiresAt time.Time
 }
 type Message struct {
+	LocalOnly   bool       `json:"local_only,omitempty"`
 	HTML        string     `json:"html,omitempty"`
 	ChallengeID string     `json:"challenge_id,omitempty"`
 	ShareID     string     `json:"share_id,omitempty"`
@@ -108,6 +109,7 @@ type AuditEvent struct {
 	At         time.Time `json:"at"`
 }
 type database struct {
+	AdminOTPs     map[string]adminOTP     `json:"admin_otps,omitempty"`
 	People        map[string]Person       `json:"people"`
 	Photos        map[string]Photo        `json:"photos"`
 	Shares        map[string]Share        `json:"shares"`

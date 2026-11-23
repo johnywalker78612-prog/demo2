@@ -21,14 +21,15 @@ const Disclaimer = "Private, unverified record. Not a government service, immigr
 var errNotFound = errors.New("record not found")
 
 type Config struct {
-	EmailLogoURL  string
-	PublicURL     string
-	SMTP          SMTPConfig
-	AdminUsername string
-	AdminEmail    string
-	AdminPassword string
-	APIToken      string
-	SecureCookies bool
+	EmailLogoURL   string
+	PublicURL      string
+	SMTP           SMTPConfig
+	AdminUsername  string
+	AdminEmail     string
+	AdminPassword  string
+	APIToken       string
+	SecureCookies  bool
+	LocalOTPOutbox bool
 }
 type session struct {
 	CSRF    string
@@ -62,7 +63,7 @@ func New(store *Store, cfg Config) (*Server, error) {
 	if err := validateMailConfig(&cfg); err != nil {
 		return nil, err
 	}
-	s := &Server{mailSend: sendSMTP, store: store, cfg: cfg, mux: http.NewServeMux(), sessions: map[string]session{}, demoSessions: map[string]demoSession{}, demoSMSNext: map[string]time.Time{}}
+	s := &Server{mailSend: sendSMTP, store: store, cfg: cfg, mux: http.NewServeMux(), sessions: map[string]session{}, demoSessions: map[string]demoSession{}, demoSMSNext: map[string]time.Time{}, demoOTPSend: msg91Sender()}
 	s.routes()
 	return s, nil
 }

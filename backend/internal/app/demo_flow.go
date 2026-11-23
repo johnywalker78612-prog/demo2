@@ -15,7 +15,7 @@ type demoSession struct {
 	Verified                                   bool
 	CodeExpires                                time.Time
 	CodeAttempts                               int
-	CodePhone                                  string
+	CodeRecipient, CodeChannel                 string
 	Expires                                    time.Time
 }
 
@@ -44,7 +44,9 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 	}
 	demoError := ""
-	displayPhone := ""
+	deliveryOptions, codeDestination, codeChannel := "", "", ""
+	defaultDelivery := ""
+	responseStatus := http.StatusOK
 	switch r.URL.Path {
 	case "/gov/status/pdf", "/gov/share-preview/pdf", "/gov/share-result/pdf":
 		if !se.Verified || se.PersonID == "" {
@@ -119,16 +121,51 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/gov/passport", http.StatusSeeOther)
 			return
 		}
-		phone := smsPhone(p.PhoneNumber)
-		if phone == "" {
-			http.Error(w, "This record needs a linked mobile number in international format.", http.StatusUnprocessableEntity)
-			return
+		adminCodeAvailable := s.hasAdminOTP(p.ID)
+		if adminCodeAvailable {
+			defaultDelivery = "admin"
+			deliveryOptions = `<div class="osmuk-radios__item"><input class="osmuk-radios__input" type="radio" id="delivery-admin" name="delivery" value="admin" required checked><label class="osmuk-label osmuk-radios__label" for="delivery-admin">Use a code from your administrator</label></div>`
 		}
-		displayPhone = phone
+		for _, channel := range []string{"email", "sms"} {
+			recipient := demoOTPRecipient(p, channel)
+			if recipient == "" {
+				continue
+			}
+			available := s.demoOTPSender(channel) != nil
+			selected := available && defaultDelivery == ""
+			if selected {
+				defaultDelivery = channel
+			}
+			deliveryOptions += demoOTPOption(channel, recipient, available, selected)
+		}
+
+		if deliveryOptions == "" {
+			deliveryOptions = `<p class="osmuk-body">This record has no available sign-in method.</p>`
+		}
 		if r.Method == http.MethodPost {
-			if choice := r.PostFormValue("delivery"); choice != "email" && choice != "sms" {
-				http.Error(w, "Choose how to request a security code.", http.StatusBadRequest)
+			choice := r.PostFormValue("delivery")
+			if choice == "admin" && adminCodeAvailable {
+				se.CodeChannel = "admin"
+				se.Challenge = ""
+				se.Verified = false
+				s.demoSessions[key] = se
+				http.Redirect(w, r, "/gov/security-code", http.StatusSeeOther)
 				return
+			}
+			if !r.PostForm.Has("delivery") && defaultDelivery == "email" && s.cfg.LocalOTPOutbox && !s.cfg.SMTP.enabled() {
+				choice = defaultDelivery
+			}
+			recipient := demoOTPRecipient(p, choice)
+			if recipient == "" {
+				responseStatus = http.StatusUnprocessableEntity
+				demoError = "Choose an email address or mobile number saved on your record."
+				break
+			}
+			sender := s.demoOTPSender(choice)
+			if sender == nil {
+				responseStatus = http.StatusServiceUnavailable
+				demoError = "Delivery through that channel is unavailable. Choose another option if one is available."
+				break
 			}
 			now := time.Now()
 			if now.Before(s.demoSMSNext[p.ID]) {
@@ -136,23 +173,21 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Please wait a minute before requesting another security code.", http.StatusTooManyRequests)
 				return
 			}
-			if s.demoOTPSend == nil {
-				http.Error(w, "Text message delivery is temporarily unavailable.", http.StatusServiceUnavailable)
-				return
-			}
 			s.demoSMSNext[p.ID] = now.Add(time.Minute)
 			s.demoMu.Unlock()
-			nextSession, err := sendDemoOTP(r.Context(), s.demoOTPSend, se, key, phone)
+			nextSession, err := sendDemoOTP(r.Context(), sender, se, key, recipient)
 			s.demoMu.Lock()
 			if err != nil {
-				http.Error(w, "The security code could not be sent. Please try again later.", http.StatusBadGateway)
-				return
+				responseStatus = http.StatusBadGateway
+				demoError = "The security code could not be sent. Please try again later."
+				break
 			}
 			if s.demoSessions[key] != se {
 				http.Redirect(w, r, "/gov/passport", http.StatusSeeOther)
 				return
 			}
 			se = nextSession
+			se.CodeChannel = choice
 			s.demoSessions[key] = se
 			http.Redirect(w, r, "/gov/security-code", http.StatusSeeOther)
 			return
@@ -162,22 +197,48 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/gov/status", http.StatusSeeOther)
 			return
 		}
+		if se.CodeChannel == "admin" && s.cfg.LocalOTPOutbox {
+			codeChannel = "admin"
+			codeDestination = "your administrator"
+			if r.Method == http.MethodPost {
+				code := strings.TrimSpace(r.PostFormValue("verificationCode"))
+				verified, _ := s.verifyAdminOTP(se.PersonID, code)
+				if !verified {
+					demoError = "Invalid, expired, or already used administrator code."
+					break
+				}
+				se.Verified = true
+				s.demoSessions[key] = se
+				http.Redirect(w, r, "/gov/status", http.StatusSeeOther)
+				return
+			}
+			break
+		}
 		p, exists := s.store.snapshot().People[se.PersonID]
-		if !exists || se.CodePhone == "" || se.CodePhone != smsPhone(p.PhoneNumber) {
+		if !exists || se.CodeRecipient == "" || se.CodeRecipient != demoOTPRecipient(p, se.CodeChannel) {
 			http.Redirect(w, r, "/gov/passport", http.StatusSeeOther)
 			return
 		}
-		if se.Challenge == "" || !time.Now().Before(se.CodeExpires) {
+		canUseAdminCode := se.CodeChannel == "email" && !s.cfg.SMTP.enabled() && s.hasAdminOTP(se.PersonID)
+		if (se.Challenge == "" || !time.Now().Before(se.CodeExpires)) && !canUseAdminCode {
 			http.Redirect(w, r, "/gov/security-code-delivery", http.StatusSeeOther)
 			return
 		}
-		displayPhone = se.CodePhone
+		codeDestination = maskDemoOTPRecipient(se.CodeChannel, se.CodeRecipient)
+		codeChannel = se.CodeChannel
 		if r.Method == http.MethodPost {
 			code := strings.TrimSpace(r.PostFormValue("verificationCode"))
-			if !se.verifyDemoOTP(code) {
+			verified := se.verifyDemoOTP(key, code, time.Now())
+			if !verified && canUseAdminCode {
+				verified, _ = s.verifyAdminOTP(se.PersonID, code)
+			}
+			if !verified {
+				demoError = "Invalid or expired security code."
 				s.demoSessions[key] = se
 				break
 			}
+			se.Challenge = ""
+			se.Verified = true
 			s.demoSessions[key] = se
 			http.Redirect(w, r, "/gov/status", http.StatusSeeOther)
 			return
@@ -210,19 +271,44 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if displayPhone != "" {
-		masked := "ending in " + displayPhone[len(displayPhone)-4:]
-		content = bytes.ReplaceAll(content, []byte("LINKED_PHONE_SUFFIX"), []byte(masked))
+	if r.URL.Path == "/gov/security-code-delivery" {
+		buttonState := ""
+		if defaultDelivery == "" {
+			buttonState = "disabled"
+		}
+		content = bytes.ReplaceAll(content, []byte(`data-otp-submit`), []byte(buttonState))
+		if demoError != "" {
+			deliveryOptions = `<p class="osmuk-body" role="alert">` + template.HTMLEscapeString(demoError) + "</p>" + deliveryOptions
+		}
+		content = bytes.ReplaceAll(content, []byte("<!-- OTP_DELIVERY_OPTIONS -->"), []byte(deliveryOptions))
 	}
-	if demoError != "" && r.URL.Path == "/gov/security-code" {
-		content = addDemoCodeError(content, demoError)
+	if r.URL.Path == "/gov/security-code" {
+		if codeChannel == "admin" {
+			content = bytes.ReplaceAll(content, []byte("We requested a single-use, 6-digit security code for:"), []byte("Enter the single-use code provided by:"))
+			content = bytes.ReplaceAll(content, []byte("It may take a few minutes to arrive. You need to use this code within 10 minutes or it will expire."), []byte("Administrator codes expire 24 hours after they are generated."))
+			content = bytes.ReplaceAll(content, []byte(`<form action="/gov/security-code-delivery" method="post">`), []byte(`<form action="/gov/security-code-delivery" method="post" hidden>`))
+		}
+		if codeChannel != "admin" && s.hasAdminOTP(se.PersonID) {
+			content = bytes.ReplaceAll(content, []byte("<!-- OTP_ADMIN_SWITCH -->"), []byte(`<form action="/gov/security-code-delivery" method="post"><button class="osmuk-button osmuk-button--secondary" type="submit" name="delivery" value="admin">Use a code from your administrator</button></form>`))
+		}
+		if codeChannel == "email" && s.cfg.LocalOTPOutbox && !s.cfg.SMTP.enabled() {
+			if s.hasAdminOTP(se.PersonID) {
+				content = bytes.ReplaceAll(content, []byte("<!-- OTP_ADMIN_INLINE_NOTICE -->"), []byte(`<p class="osmuk-body">You can also enter your 24-hour administrator code here.</p>`))
+			}
+			content = bytes.ReplaceAll(content, []byte("<!-- OTP_LOCAL_NOTICE -->"), []byte(`<p class="osmuk-body">Local test mode. Get the code from the <a href="/admin/outbox">admin email outbox</a>. No email was sent.</p>`))
+		}
+		content = bytes.ReplaceAll(content, []byte("OTP_DESTINATION"), []byte(template.HTMLEscapeString(codeDestination)))
+		content = bytes.ReplaceAll(content, []byte("OTP_CHANNEL"), []byte(codeChannel))
+		if demoError != "" {
+			content = addDemoCodeError(content, demoError)
+		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// Keep the original demo page styling and scripts available. The global
 	// server policy is intentionally stricter for API responses, but these
 	// pages already depend on the bundled GOV.UK assets and their existing JS.
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'")
-	w.WriteHeader(200)
+	w.WriteHeader(responseStatus)
 	if r.Method != http.MethodHead {
 		_, _ = w.Write(content)
 	}
@@ -234,6 +320,23 @@ func addDemoCodeError(content []byte, message string) []byte {
 	return []byte(strings.Replace(string(content), marker, marker+errorHTML, 1))
 }
 
+const skilledWorkerRoute = "Skilled Worker Route"
+
+var skilledWorkerActivities = []string{
+	"Work (subject to the restrictions below).",
+	"Study, subject to Academic Technology Approval Scheme (ATAS) conditions.",
+	"Use the National Health Service (NHS) in a similar way to permanent UK residents.",
+	"Rent somewhere to live.",
+	"Access a current account with a bank or building society in the UK.",
+}
+
+func isSkilledWorkerStatus(status string) bool {
+	return strings.EqualFold(strings.TrimSpace(status), skilledWorkerRoute)
+}
+
+var demoEntriesRow = regexp.MustCompile(`(?s)<div class="(?:osmuk|govuk)-summary-list__row">\s*<dt[^>]*>Number of entries allowed</dt>\s*<dd[^>]*>.*?</dd>\s*</div>`)
+var demoActivitiesList = regexp.MustCompile(`(?s)(What you can do in the UK</h2>\s*<p[^>]*>).*?(</p>\s*<ul[^>]*>).*?(</ul>)`)
+
 func populateDemo(content []byte, p Person) []byte {
 	name := template.HTMLEscapeString(p.FullName())
 	content = []byte(strings.ReplaceAll(string(content), "Example Person", name))
@@ -242,7 +345,16 @@ func populateDemo(content []byte, p Person) []byte {
 	content = replaceDemoSummary(content, "Accompanied by", p.AccompaniedBy)
 	content = replaceDemoSummary(content, "Valid from", formatDemoDate(p.ValidFrom))
 	content = replaceDemoSummary(content, "Valid until", formatDemoDate(p.ValidUntil))
-	content = replaceDemoSummary(content, "Number of entries allowed", p.EntriesAllowed)
+	if isSkilledWorkerStatus(p.RecordedStatus) {
+		content = demoEntriesRow.ReplaceAll(content, nil)
+		var items strings.Builder
+		for _, activity := range skilledWorkerActivities {
+			items.WriteString("<li>" + template.HTMLEscapeString(activity) + "</li>")
+		}
+		content = demoActivitiesList.ReplaceAll(content, []byte("${1}Illustrative activities for this fictional record.${2}"+items.String()+"${3}"))
+	} else {
+		content = replaceDemoSummary(content, "Number of entries allowed", p.EntriesAllowed)
+	}
 	if p.ShareCode != "" {
 		content = []byte(strings.ReplaceAll(string(content), "DEMO-NOT-VALID", template.HTMLEscapeString(p.ShareCode)))
 	}

@@ -10,11 +10,14 @@ import (
 	"io"
 	"net/http"
 	"net/mail"
+	"regexp"
 	"strings"
 	"time"
 )
 
 var fields = []string{"first_name", "last_name", "email", "phone_number", "date_of_birth", "nationality", "passport_number", "recorded_status", "accompanied_by", "valid_from", "valid_until", "entries_allowed", "national_insurance_number", "share_code"}
+
+var shareCodeInput = regexp.MustCompile(`^(?:[A-Za-z0-9]{9}|[A-Za-z0-9]{3}-[A-Za-z0-9]{3}-[A-Za-z0-9]{3})$`)
 
 func apply(p *Person, input map[string]string) error {
 	for key, v := range input {
@@ -28,7 +31,15 @@ func apply(p *Person, input map[string]string) error {
 		}
 		switch key {
 		case "share_code":
-			p.ShareCode = v
+			if v == "" || v == p.ShareCode {
+				p.ShareCode = v
+				continue
+			}
+			if !shareCodeInput.MatchString(v) {
+				return errors.New("Enter a share code with nine letters or digits, for example GHY-76H-67A")
+			}
+			code := strings.ToUpper(strings.ReplaceAll(v, "-", ""))
+			p.ShareCode = code[:3] + "-" + code[3:6] + "-" + code[6:]
 		case "first_name":
 			p.FirstName = v
 		case "last_name":

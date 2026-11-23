@@ -242,21 +242,13 @@
 
         <form id="passwordless-login-form" action="/gov/security-code-delivery" method="post">
             <h1 class="osmuk-heading-l">Receive a security code</h1>
-            <p class="osmuk-body">Code delivery is currently unavailable. The mobile number saved on your record is <strong>LINKED_PHONE_SUFFIX</strong>.</p>
             <fieldset class="osmuk-fieldset osmuk-!-margin-bottom-6">
-                <legend class="osmuk-fieldset__legend">Choose an option</legend>
+                <legend class="osmuk-fieldset__legend">Choose where to receive your code</legend>
                 <div class="osmuk-radios">
-                    <div class="osmuk-radios__item">
-                        <input class="osmuk-radios__input" type="radio" id="delivery-email" name="delivery" value="email" required>
-                        <label class="osmuk-label osmuk-radios__label" for="delivery-email">Email option</label>
-                    </div>
-                    <div class="osmuk-radios__item">
-                        <input class="osmuk-radios__input" type="radio" id="delivery-sms" name="delivery" value="sms" required>
-                        <label class="osmuk-label osmuk-radios__label" for="delivery-sms">Text message (SMS)</label>
-                    </div>
+                    <!-- OTP_DELIVERY_OPTIONS -->
                 </div>
             </fieldset>
-            <button type="submit" class="osmuk-button" id="submit">Send security code</button>
+            <button type="submit" class="osmuk-button" id="submit" data-otp-submit>Send security code</button>
         </form>
 
         
@@ -368,6 +360,5 @@
 
   
 
-<script src="/assets/js/cookie-banner.js"></script>
 <script src="/assets/js/demo-navigation.js"></script>
 </body></html>

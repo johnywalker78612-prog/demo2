@@ -225,6 +225,9 @@ Existing operations remain `POST /api/v1/people`, `GET /api/v1/people/{id}`, `PA
 
 ### Codes for ID and date-of-birth sign-in
 
-The demo has no configured OTP delivery provider. Delivery requests return
-HTTP 503. The send and verification functions generate random six-digit codes
-and enforce a ten-minute expiry, five attempts, and single use.
+The sign-in page offers the email address and international mobile number saved
+on the matched record. Configure the existing SMTP or Brevo settings for email.
+For SMS, set `MSG91_OTP_ENABLED=true`, `MSG91_AUTH_KEY`, and
+`MSG91_OTP_TEMPLATE_ID`. The MSG91 SMS template must contain `##OTP##`.
+A saved contact is shown as unavailable when its provider is unconfigured.
+Codes expire after ten minutes or five incorrect attempts and can be used once.

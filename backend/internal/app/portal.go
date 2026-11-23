@@ -22,6 +22,9 @@ type field struct {
 	Placeholder             string
 }
 type portalData struct {
+	AdminOTPEnabled                        bool
+	AdminOTPCode                           string
+	HideEntriesAllowed                     bool
 	EmailEnabled                           bool
 	Title, CSRF, Message, SharePath, Token string
 	Person                                 Person
@@ -261,6 +264,20 @@ func (s *Server) portalRoutes() {
 			}
 		}))
 	}
+	s.mux.HandleFunc("POST /admin/people/{id}/sign-in-code", s.portalAuth(func(w http.ResponseWriter, r *http.Request, se session) {
+		person, exists := s.store.snapshot().People[r.PathValue("id")]
+		if !s.cfg.LocalOTPOutbox || !exists {
+			http.NotFound(w, r)
+			return
+		}
+		code, err := s.issueAdminOTP(person.ID)
+		if err != nil {
+			s.renderPerson(w, se, person, "Could not generate a sign-in code.", "")
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		s.renderPersonDetails(w, se, person, portalData{AdminOTPCode: code})
+	}))
 	s.mux.HandleFunc("POST /admin/people/{id}/verify-email", s.portalAuth(func(w http.ResponseWriter, r *http.Request, se session) {
 		_, err := s.verification(r.PathValue("id"))
 		if err != nil {
@@ -408,10 +425,18 @@ func (s *Server) portalSave(w http.ResponseWriter, r *http.Request, se session) 
 	http.Redirect(w, r, "/admin/people/"+person.ID+"?saved=1", 303)
 }
 func (s *Server) renderPerson(w http.ResponseWriter, se session, p Person, message, path string, draft ...map[string]string) {
+	s.renderPersonDetails(w, se, p, portalData{Message: message, SharePath: path}, draft...)
+}
+
+func (s *Server) renderPersonDetails(w http.ResponseWriter, se session, p Person, data portalData, draft ...map[string]string) {
 	labels := []string{"First name", "Last name", "Email", "Phone number", "Date of birth", "Nationality", "Passport number", "Recorded status (unverified)", "Accompanied by", "Valid from", "Valid until", "Entries allowed", "National Insurance number", "Share code (user supplied)"}
 	raw, _ := json.Marshal(p)
 	var values map[string]any
 	_ = json.Unmarshal(raw, &values)
+	recordedStatus := p.RecordedStatus
+	if len(draft) > 0 {
+		recordedStatus = draft[0]["recorded_status"]
+	}
 	f := []field{}
 	for i, k := range fields {
 		v, _ := values[k].(string)
@@ -460,6 +485,14 @@ func (s *Server) renderPerson(w http.ResponseWriter, se session, p Person, messa
 	if p.ID != "" {
 		title = fmt.Sprintf("Record: %s", p.FullName())
 	}
-	render(w, 200, portalData{Title: title, View: "person", Person: p, Fields: f, Shares: shares, CSRF: se.CSRF, Message: message, SharePath: path})
+	data.Title = title
+	data.View = "person"
+	data.Person = p
+	data.AdminOTPEnabled = s.cfg.LocalOTPOutbox && p.ID != ""
+	data.HideEntriesAllowed = isSkilledWorkerStatus(recordedStatus)
+	data.Fields = f
+	data.Shares = shares
+	data.CSRF = se.CSRF
+	render(w, 200, data)
 
 }

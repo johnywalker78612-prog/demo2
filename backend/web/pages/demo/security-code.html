@@ -237,9 +237,11 @@
                                 <div id="kc-form" class="">
                                     <div id="kc-form-wrapper" class="">
         <span class="osmuk-caption-l">Private Records demo sign-in</span>
-        <h1 class="osmuk-heading-l">Check your text messages</h1>
-        <p class="osmuk-body">We requested a single-use, 6-digit security code by text message to the mobile number</p>
-                <p class="osmuk-body osmuk-!-font-weight-bold">LINKED_PHONE_SUFFIX</p>
+        <h1 class="osmuk-heading-l">Check for your security code</h1>
+        <p class="osmuk-body">We requested a single-use, 6-digit security code for:</p>
+                <p class="osmuk-body osmuk-!-font-weight-bold">OTP_DESTINATION</p>
+        <!-- OTP_LOCAL_NOTICE -->
+        <!-- OTP_ADMIN_INLINE_NOTICE -->
         <p class="osmuk-body">It may take a few minutes to arrive. You need to use this code within 10 minutes or it will expire.</p>
         <form id="kc-totp-login-form" class=" form" action="/gov/security-code" method="post">
             
@@ -272,8 +274,9 @@
 
         </form>
         <form action="/gov/security-code-delivery" method="post">
-            <button class="osmuk-button osmuk-button--secondary" type="submit" name="delivery" value="sms">Resend security code</button>
+            <button class="osmuk-button osmuk-button--secondary" type="submit" name="delivery" value="OTP_CHANNEL">Resend security code</button>
         </form>
+        <!-- OTP_ADMIN_SWITCH -->
 
         <p class="osmuk-body">If you do not have access to your phone number and email address, <a href="#local-only-status" class="osmuk-link" data-local-unavailable="link">recover your account</a>.</p>
 
@@ -386,7 +389,6 @@
 
   
 
-<script src="/assets/js/cookie-banner.js"></script>
 
 <script src="/assets/js/demo-navigation.js"></script>
 </body></html>

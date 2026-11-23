@@ -106,14 +106,25 @@ func TestRenamedFlowTemplatesAndCookie(t *testing.T) {
 	}
 }
 
-func TestDemoBothOptionsSendOnlyToLinkedPhone(t *testing.T) {
-	for _, choice := range []string{"email", "sms"} {
-		t.Run(choice, func(t *testing.T) {
+func TestDemoUsesSavedContactForSelectedChannel(t *testing.T) {
+	for _, tc := range []struct {
+		name, choice, email, phone string
+		local                      bool
+	}{
+		{"email only", "email", "example@example.test", "", false},
+		{"phone only in UK local format", "sms", "", "07700 900123", false},
+		{"email with UK personal number", "email", "example@example.test", "07000 900123", false},
+		{"both choose email", "email", "example@example.test", "+44 7700 900123", false},
+		{"both choose SMS", "sms", "example@example.test", "+44 7700 900123", false},
+		{"local email outbox", "email", "example@example.test", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			choice := tc.choice
 			s, _, _ := fixture(t)
 			p := create(t, s)
 			if err := s.store.update(func(d *database) error {
-				p.PhoneNumber = "+44 7700 900123"
-				p.Email = ""
+				p.PhoneNumber = tc.phone
+				p.Email = tc.email
 				d.People[p.ID] = p
 				return nil
 			}); err != nil {
@@ -127,6 +138,14 @@ func TestDemoBothOptionsSendOnlyToLinkedPhone(t *testing.T) {
 					t.Fatal("unexpected SMS recipient or code length")
 				}
 				code = value
+				return nil
+			}
+			s.mailSend = func(_ SMTPConfig, message Message) error {
+				sends++
+				if message.To != tc.email {
+					t.Fatal("unexpected email recipient")
+				}
+				code = strings.TrimSuffix(strings.Fields(message.Body)[4], ".")
 				return nil
 			}
 			seed := httptest.NewRecorder()
@@ -144,8 +163,11 @@ func TestDemoBothOptionsSendOnlyToLinkedPhone(t *testing.T) {
 			want(t, request("POST", "/gov/date-of-birth", url.Values{"date_of_birth": {p.DateOfBirth}}), 303)
 			options := request("GET", "/gov/security-code-delivery", nil)
 			want(t, options, 200)
-			if !strings.Contains(options.Body.String(), "ending in 0123") || strings.Contains(options.Body.String(), "+447700900123") {
-				t.Fatal("expected only a masked phone number")
+			body := options.Body.String()
+			if strings.Contains(body, "phone ending in 0123") != (tc.phone != "" && !strings.HasPrefix(tc.phone, "070")) ||
+				strings.Contains(body, "***@example.test") != (tc.email != "") ||
+				strings.Contains(body, "+447700900123") || strings.Contains(body, "example@example.test") {
+				t.Fatal("expected only the saved, masked options")
 			}
 			form := url.Values{"delivery": {choice}, "phone": {"+447700900999"}}
 			sender := s.demoOTPSend
@@ -155,16 +177,117 @@ func TestDemoBothOptionsSendOnlyToLinkedPhone(t *testing.T) {
 				t.Fatal("unavailable delivery must not issue a challenge")
 			}
 			s.demoOTPSend = sender
+			if tc.local {
+				s.cfg.LocalOTPOutbox = true
+				form = nil // Reproduce the empty local delivery POST.
+				page := request("GET", "/gov/security-code-delivery", nil).Body.String()
+				if !strings.Contains(page, `value="email" required checked`) {
+					t.Fatal("email should be preselected in local mode")
+				}
+			} else {
+				s.cfg.SMTP.Host = "mock.example.test"
+			}
 			want(t, request("POST", "/gov/security-code-delivery", form), 303)
 			want(t, request("POST", "/gov/security-code-delivery", form), 429)
+			outbox := s.store.snapshot().Outbox
+			if tc.local {
+				if len(outbox) != 1 || sends != 0 ||
+					!strings.Contains(request("GET", "/gov/security-code", nil).Body.String(), "No email was sent") {
+					t.Fatal("expected local outbox delivery")
+				}
+				for _, message := range outbox {
+					if !message.LocalOnly || message.To != tc.email {
+						t.Fatal("unexpected local message")
+					}
+					code = strings.TrimSuffix(strings.Fields(message.Body)[5], ".")
+				}
+			} else if sends != 1 || len(outbox) != 0 {
+				t.Fatal("expected one external delivery and no outbox message")
+			}
 			w := request("POST", "/gov/security-code", url.Values{"verificationCode": {code}})
 			want(t, w, 303)
-			if w.Header().Get("Location") != "/gov/status" || sends != 1 || len(s.store.snapshot().Outbox) != 0 {
-				t.Fatal("expected one SMS, verified status and no email")
+			if w.Header().Get("Location") != "/gov/status" {
+				t.Fatal("expected successful verification and a redirect to status")
 			}
 			if s.demoSessions[hash(cookie.Value)].Challenge != "" {
 				t.Fatal("accepted code should be consumed")
 			}
 		})
+	}
+}
+
+func TestAdminOTPIsRecordBoundAndSingleUse(t *testing.T) {
+	s, _, _ := fixture(t)
+	person := create(t, s)
+	code, err := s.issueAdminOTP(person.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otp := s.store.snapshot().AdminOTPs[person.ID]
+	if remaining := time.Until(otp.ExpiresAt); remaining > 24*time.Hour || remaining < 24*time.Hour-time.Minute {
+		t.Fatalf("unexpected lifetime: %s", remaining)
+	}
+	if ok, _ := s.verifyAdminOTP("other-record", code); ok {
+		t.Fatal("code accepted for another record")
+	}
+	if ok, err := s.verifyAdminOTP(person.ID, code); !ok || err != nil {
+		t.Fatalf("issued code rejected: %v", err)
+	}
+	if ok, _ := s.verifyAdminOTP(person.ID, code); ok {
+		t.Fatal("code accepted twice")
+	}
+}
+
+func TestAdminCodeCanBeSelectedFromEmailCodeScreen(t *testing.T) {
+	s, _, _ := fixture(t)
+	s.cfg.LocalOTPOutbox = true
+	p := create(t, s)
+	code, err := s.issueAdminOTP(p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const token = "admin-code-test-session"
+	emailSession := demoSession{
+		PersonID: p.ID, Expires: time.Now().Add(time.Minute),
+		CodeChannel: "email", CodeRecipient: p.Email,
+		Challenge: "email challenge", CodeExpires: time.Now().Add(time.Minute),
+	}
+	s.demoSessions[hash(token)] = emailSession
+	request := func(method, path string, form url.Values) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(form.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.AddCookie(&http.Cookie{Name: "demo_session", Value: token})
+		w := httptest.NewRecorder()
+		s.ServeHTTP(w, r)
+		return w
+	}
+	options := request("GET", "/gov/security-code-delivery", nil)
+	want(t, options, 200)
+	if !strings.Contains(options.Body.String(), `value="admin" required checked`) {
+		t.Fatal("administrator code should be preselected")
+	}
+	page := request("GET", "/gov/security-code", nil)
+	want(t, page, 200)
+	if !strings.Contains(page.Body.String(), "Use a code from your administrator") {
+		t.Fatal("email screen has no switch")
+	}
+	direct := request("POST", "/gov/security-code", url.Values{"verificationCode": {code}})
+	want(t, direct, 303)
+	if direct.Header().Get("Location") != "/gov/status" {
+		t.Fatal("administrator code did not verify directly on the local email screen")
+	}
+	if _, ok := s.store.snapshot().AdminOTPs[p.ID]; ok {
+		t.Fatal("email screen did not consume administrator code")
+	}
+	s.demoSessions[hash(token)] = emailSession
+	code, err = s.issueAdminOTP(p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want(t, request("POST", "/gov/security-code-delivery", url.Values{"delivery": {"admin"}}), 303)
+	verified := request("POST", "/gov/security-code", url.Values{"verificationCode": {code}})
+	want(t, verified, 303)
+	if verified.Header().Get("Location") != "/gov/status" {
+		t.Fatal("administrator code did not verify")
 	}
 }

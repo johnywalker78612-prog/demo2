@@ -10,7 +10,35 @@
     nationality.placeholder = 'For example, IND';
     nationality.addEventListener('input', () => { nationality.value = nationality.value.toUpperCase(); });
   }
+  const shareCode = form.querySelector('#share_code');
+  const suggestCode = form.querySelector('#suggest-share-code');
+  if (shareCode && suggestCode) {
+    const format = (value) => (value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 9).match(/.{1,3}/g) || []).join('-');
+    shareCode.addEventListener('input', () => { shareCode.value = format(shareCode.value); });
+    suggestCode.hidden = false;
+    suggestCode.addEventListener('click', () => {
+      const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      const random = new Uint32Array(9);
+      crypto.getRandomValues(random);
+      const suggested = Array.from(random, (value) => alphabet[value % alphabet.length]);
+      if (!suggested.some((value) => /[0-9]/.test(value))) suggested[3] = String(random[3] % 10);
+      if (!suggested.some((value) => /[A-Z]/.test(value))) suggested[0] = alphabet[random[0] % 26];
+      shareCode.value = format(suggested.join(''));
+      shareCode.focus();
+    });
+  }
   const entries = form.querySelector('#entries_allowed');
+  const recordedStatus = form.querySelector('#recorded_status');
+  if (entries && recordedStatus) {
+    const updateEntries = () => {
+      const skilledWorker = recordedStatus.value.trim().toLowerCase() === 'skilled worker route';
+      entries.closest('div').hidden = skilledWorker;
+      entries.disabled = skilledWorker;
+    };
+    recordedStatus.addEventListener('input', updateEntries);
+    updateEntries();
+  }
+
   if (entries) {
     entries.type = 'text';
     entries.placeholder = 'For example, 2 or Multiple';

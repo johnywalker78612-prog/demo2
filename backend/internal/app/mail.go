@@ -247,6 +247,9 @@ func (s *Server) deliverMessage(id string) error {
 	if !ok {
 		return errNotFound
 	}
+	if m.LocalOnly {
+		return errors.New("local test codes cannot be emailed")
+	}
 	if m.SentAt != nil {
 		return errors.New("message has already been sent")
 	}

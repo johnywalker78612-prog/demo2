@@ -114,12 +114,12 @@ func demoPDFDate(value string) string {
 }
 
 func demoPDFHeader(p *fpdf.Fpdf, title string) {
-	p.SetFillColor(29, 112, 183)
+	p.SetFillColor(37, 54, 66)
 	p.Rect(0, 0, 210, 28, "F")
 	p.SetTextColor(255, 255, 255)
 	p.SetFont("Private", "B", 22)
 	p.SetXY(18, 8)
-	p.Cell(170, 10, "GOV.UK")
+	p.Cell(170, 10, "Private Records Demo")
 	p.SetTextColor(30, 30, 30)
 	p.SetFont("Private", "B", 18)
 	p.SetXY(20, 40)
@@ -180,7 +180,18 @@ func demoStatusPDF(p Person, photo *Photo) ([]byte, error) {
 	doc.Cell(170, 8, "What you can do in the UK")
 	doc.Ln(14)
 	doc.SetFont("Private", "", 11)
-	doc.MultiCell(170, 6, "You can:\n\n- stay in the UK according to the dates recorded above\n- visit the UK for tourism and to see family and friends\n- travel in and out of the UK as permitted by the recorded status\n\nThese details were entered by an administrator and have not been verified against official sources.", "", "L", false)
+	if isSkilledWorkerStatus(p.RecordedStatus) {
+		doc.MultiCell(170, 6, "Illustrative activities for this fictional record.", "", "L", false)
+		doc.Ln(3)
+		for _, activity := range skilledWorkerActivities {
+			doc.Cell(5, 6, "•")
+			doc.MultiCell(165, 6, activity, "", "L", false)
+		}
+		doc.Ln(3)
+		doc.MultiCell(170, 6, "These details have not been verified against official sources.", "", "L", false)
+	} else {
+		doc.MultiCell(170, 6, "You can:\n\n- stay in the UK according to the dates recorded above\n- visit the UK for tourism and to see family and friends\n- travel in and out of the UK as permitted by the recorded status\n\nThese details were entered by an administrator and have not been verified against official sources.", "", "L", false)
+	}
 	doc.AddPage()
 	demoPDFHeader(doc, "View and prove your immigration status")
 	doc.SetY(64)
