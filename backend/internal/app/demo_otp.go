@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"fmt"
 	"math/big"
 	"regexp"
@@ -38,7 +39,18 @@ func sendDemoOTP(ctx context.Context, send func(context.Context, string, string)
 	return session, nil
 }
 
-func (session *demoSession) verifyDemoOTP() bool {
+func (session *demoSession) verifyDemoOTP(key, code string, now time.Time) bool {
+	if session.Challenge == "" || !now.Before(session.CodeExpires) {
+		return false
+	}
+	if subtle.ConstantTimeCompare([]byte(hash(key+code)), []byte(session.Challenge)) != 1 {
+		session.CodeAttempts++
+		if session.CodeAttempts >= 5 {
+			session.Challenge = ""
+		}
+		return false
+	}
+	session.Challenge = ""
 	session.Verified = true
 	return true
 }
