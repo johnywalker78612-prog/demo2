@@ -173,13 +173,8 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 		}
 		displayPhone = se.CodePhone
 		if r.Method == http.MethodPost {
-			code := "989800"
+			code := strings.TrimSpace(r.PostFormValue("verificationCode"))
 			if !se.verifyDemoOTP(code) {
-				if se.CodeAttempts >= 5 {
-					demoError = "Too many incorrect attempts. Use the resend button to request a new code."
-				} else {
-					demoError = "Invalid code entered, please check your code and enter it again."
-				}
 				s.demoSessions[key] = se
 				break
 			}
