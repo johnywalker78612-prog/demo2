@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: private-records-demo
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeployTrigger: off
+    envVars:
+      - key: RECORDS_CLOUD
+        value: "true"
+      - key: RECORDS_SECURE_COOKIES
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: RECORDS_DATA_KEY
+        sync: false
+      - key: RECORDS_ADMIN_PASSWORD
+        sync: false
+      - key: RECORDS_API_TOKEN
+        sync: false
+      - key: FROM_EMAIL
+        sync: false
+      - key: FROM_NAME
+        value: Private Records

@@ -1,0 +1,11 @@
+**
+!backend/
+!backend/**
+backend/.env
+backend/.env.*
+backend/data/
+backend/bin/
+backend/previews/
+backend/**/*_test.go
+!Dockerfile
+!.dockerignore

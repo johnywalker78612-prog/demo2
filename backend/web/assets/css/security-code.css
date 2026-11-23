@@ -1,0 +1,5 @@
+/* Styles for pages/page8.html. */
+@import url("vendor/osmuk-auth.css");
+
+.osmuk-footer__copyright-logo::before { content: none; }
+.osmuk-footer__crest { display: block; width: 125px; height: 102px; margin: 0 auto 10px; }

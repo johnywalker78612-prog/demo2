@@ -1,0 +1,16 @@
+evisa-immigration.uk {
+ encode zstd gzip
+ reverse_proxy localhost:10000 {
+  header_up -X-Forwarded-For
+  header_up -X-Real-IP
+  header_up -Forwarded
+  header_up -CF-Connecting-IP
+  header_up -True-Client-IP
+  header_up -Client-IP
+  header_up -X-Client-IP
+  header_up -Fastly-Client-IP
+ }
+}
+www.evisa-immigration.uk {
+ redir https://evisa-immigration.uk{uri} permanent
+}

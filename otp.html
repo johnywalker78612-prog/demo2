@@ -1,0 +1,44 @@
+<!-- const otpEmailHTML = ` -->
+
+
+
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:24px;background:#ffffff;
+             font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;line-height:1.5;">
+
+  <p style="font-size:16px;margin:0 0 20px;">You requested a security code.</p>
+
+  <blockquote style="margin:0 0 20px;padding:4px 0 4px 16px;border-left:4px solid #888;">
+    <p style="font-size:16px;margin:0;">Your security code is: <strong>{{.Code}}</strong></p>
+  </blockquote>
+
+  <p style="font-size:16px;margin:0 0 28px;">
+    Your code expires in {{.ExpiryMinutes}} minutes. It can only be used once.
+  </p>
+
+  <h2 style="font-size:22px;font-weight:bold;margin:0 0 16px;">
+    Sign in to your {{.AppName}} account
+  </h2>
+
+  <p style="font-size:16px;margin:0 0 16px;">
+    To complete an action or use your account, sign in at:
+  </p>
+
+  <blockquote style="margin:0 0 28px;padding:4px 0 4px 16px;border-left:4px solid #888;">
+    <a href="{{.SignInURL}}" style="font-size:16px;color:#1a73e8;">{{.SignInURL}}</a>
+  </blockquote>
+
+  <p style="font-size:16px;margin:0 0 4px;">Regards,</p>
+  <p style="font-size:16px;margin:0 0 28px;">{{.TeamName}}</p>
+
+  <p style="font-size:14px;color:#666;margin:0;">
+    This is an automated message. Do not reply to this email.
+  </p>
+
+</body>
+</html>
+
+
+<!-- ` -->

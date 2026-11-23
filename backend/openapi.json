@@ -1,0 +1,1200 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Private Records API",
+    "version": "1.0.0",
+    "description": "Standalone local service. All records are unverified. Internal sharing links have no government validity. Email messages use a development outbox; no email is sent."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8081"
+    }
+  ],
+  "security": [
+    {
+      "adminBearer": []
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "Health",
+        "operationId": "get_healthz",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/people": {
+      "get": {
+        "summary": "List people",
+        "operationId": "get_api_v1_people",
+        "responses": {
+          "200": {
+            "description": "Object containing items, total, page, page_size and disclaimer."
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Admin-only name, email, passport or phone search"
+          },
+          {
+            "name": "field",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "name",
+                "email",
+                "passport",
+                "phone"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "created_at",
+                "updated_at",
+                "name",
+                "email",
+                "nationality",
+                "phone_number",
+                "passport_number"
+              ],
+              "default": "created_at"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          },
+          {
+            "name": "verification",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "verified",
+                "pending"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "nationality",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Exact nationality filter"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "25 results per page; out-of-range pages are clamped."
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create person",
+        "operationId": "post_api_v1_people",
+        "responses": {
+          "201": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/people/{id}": {
+      "get": {
+        "summary": "Read person",
+        "operationId": "get_api_v1_people_id",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Update person",
+        "operationId": "patch_api_v1_people_id",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonPatch"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete person and dependent resources",
+        "operationId": "delete_api_v1_people_id",
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/people/{id}/photo": {
+      "put": {
+        "summary": "Upload photo",
+        "operationId": "put_api_v1_people_id_photo",
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Read photo",
+        "operationId": "get_api_v1_people_id_photo",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "summary": "Delete photo",
+        "operationId": "delete_api_v1_people_id_photo",
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/people/{id}/shares": {
+      "post": {
+        "summary": "Create internal link",
+        "operationId": "post_api_v1_people_id_shares",
+        "responses": {
+          "201": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareInput"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List internal links",
+        "operationId": "get_api_v1_people_id_shares",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/shares/{id}": {
+      "get": {
+        "summary": "Read link metadata",
+        "operationId": "get_api_v1_shares_id",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "summary": "Delete link",
+        "operationId": "delete_api_v1_shares_id",
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/shares/{id}/revoke": {
+      "post": {
+        "summary": "Revoke link",
+        "operationId": "post_api_v1_shares_id_revoke",
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/shares/{id}/messages": {
+      "post": {
+        "summary": "Create development link message",
+        "operationId": "post_api_v1_shares_id_messages",
+        "responses": {
+          "202": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shared/{token}": {
+      "get": {
+        "summary": "Resolve an active internal link",
+        "operationId": "get_api_v1_shared_token",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/people/{id}/email-verifications": {
+      "post": {
+        "summary": "Create development verification message",
+        "operationId": "post_api_v1_people_id_email_verifications",
+        "responses": {
+          "202": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/email-verifications/confirm": {
+      "post": {
+        "summary": "Confirm email ownership",
+        "operationId": "post_api_v1_email_verifications_confirm",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyInput"
+              }
+            }
+          }
+        },
+        "description": "Confirm email ownership using a one-time token or challenge_id plus six-digit code. Codes expire in 10 minutes; five wrong attempts invalidate the challenge. This does not verify record contents."
+      }
+    },
+    "/api/v1/outbox": {
+      "get": {
+        "summary": "List development messages",
+        "operationId": "get_api_v1_outbox",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outbox/{id}": {
+      "delete": {
+        "summary": "Delete development message",
+        "operationId": "delete_api_v1_outbox_id",
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/audit": {
+      "get": {
+        "summary": "Read mutation audit",
+        "operationId": "get_api_v1_audit",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "default": {
+            "description": "JSON error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports": {
+      "get": {
+        "summary": "Admin dashboard additions by calendar month",
+        "operationId": "get_api_v1_reports",
+        "description": "Asia/Kolkata calendar months, current partial month included. Additions include later-deleted records; updates are excluded. Historical records fall back to CreatedAt when no creation audit event exists.",
+        "parameters": [
+          {
+            "name": "months",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                1,
+                3,
+                6,
+                12
+              ],
+              "default": 12
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current total, this_month, three_months, six_months, twelve_months, selected_months, selected_added, selected_deleted, monthly counts, from, through and timezone."
+          },
+          "401": {
+            "description": "Admin bearer token required"
+          }
+        }
+      }
+    },
+    "/api/v1/outbox/{id}/send": {
+      "post": {
+        "summary": "Send a queued Private Records email using configured SMTP",
+        "operationId": "sendOutboxEmail",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SMTP accepted; email_sent is true"
+          },
+          "404": {
+            "description": "Message missing"
+          },
+          "422": {
+            "description": "SMTP unavailable, inactive message, or delivery failure"
+          }
+        }
+      }
+    },
+    "/api/v1/shared/{token}/pdf": {
+      "get": {
+        "summary": "Download an unverified private-record PDF using an active sharing token",
+        "operationId": "downloadSharedPrivatePDF",
+        "security": [],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private Records PDF; not proof of immigration status",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invalid, expired, revoked or deleted sharing link"
+          }
+        }
+      }
+    },
+    "/api/v1/people/lookup": {
+      "post": {
+        "summary": "Find a private record by internal ID and date of birth (admin only)",
+        "operationId": "lookup_person",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "date_of_birth"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 250
+                  },
+                  "date_of_birth": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Matching person record"
+          },
+          "400": {
+            "description": "Malformed JSON or unknown fields"
+          },
+          "401": {
+            "description": "Administrator authentication required"
+          },
+          "404": {
+            "description": "No matching record"
+          },
+          "422": {
+            "description": "Missing or invalid ID or date of birth"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "adminBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "PersonInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "first_name"
+        ],
+        "properties": {
+          "first_name": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "last_name": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "date_of_birth": {
+            "type": "string",
+            "maxLength": 250,
+            "description": "YYYY-MM-DD or empty string"
+          },
+          "nationality": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "passport_number": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "recorded_status": {
+            "type": "string",
+            "maxLength": 250,
+            "description": "User-supplied, unverified record value; not a government determination."
+          },
+          "accompanied_by": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "valid_from": {
+            "type": "string",
+            "maxLength": 250,
+            "description": "YYYY-MM-DD or empty string"
+          },
+          "valid_until": {
+            "type": "string",
+            "maxLength": 250,
+            "description": "YYYY-MM-DD or empty string"
+          },
+          "entries_allowed": {
+            "type": "string",
+            "description": "Digits only (for example 1, 44, 777), Multiple (case-insensitive), or empty. Multiple is stored with this capitalization.",
+            "maxLength": 250
+          },
+          "national_insurance_number": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "phone_number": {
+            "type": "string",
+            "description": "Optional phone number containing 7\u201315 digits; +, spaces, parentheses, dots and dashes are accepted."
+          }
+        }
+      },
+      "PersonPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "first_name": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "last_name": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "date_of_birth": {
+            "type": "string",
+            "maxLength": 250,
+            "description": "YYYY-MM-DD or empty string"
+          },
+          "nationality": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "passport_number": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "recorded_status": {
+            "type": "string",
+            "maxLength": 250,
+            "description": "User-supplied, unverified record value; not a government determination."
+          },
+          "accompanied_by": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "valid_from": {
+            "type": "string",
+            "maxLength": 250,
+            "description": "YYYY-MM-DD or empty string"
+          },
+          "valid_until": {
+            "type": "string",
+            "maxLength": 250,
+            "description": "YYYY-MM-DD or empty string"
+          },
+          "entries_allowed": {
+            "type": "string",
+            "description": "Digits only (for example 1, 44, 777), Multiple (case-insensitive), or empty. Multiple is stored with this capitalization.",
+            "maxLength": 250
+          },
+          "national_insurance_number": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "phone_number": {
+            "type": "string",
+            "description": "Optional phone number containing 7\u201315 digits; +, spaces, parentheses, dots and dashes are accepted."
+          }
+        }
+      },
+      "ShareInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expires_in_hours": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 168,
+            "default": 24,
+            "description": "0 or omitted selects 24 hours"
+          }
+        }
+      },
+      "MessageInput": {
+        "type": "object",
+        "required": [
+          "token",
+          "recipient"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "recipient": {
+            "type": "string",
+            "format": "email"
+          }
+        }
+      },
+      "VerifyInput": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "token"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "token": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "challenge_id",
+              "code"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "challenge_id": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string",
+                "pattern": "^[0-9]{6}$"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

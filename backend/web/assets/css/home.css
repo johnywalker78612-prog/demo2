@@ -1,0 +1,6 @@
+/* Styles for pages/page1.html. */
+@import url("vendor/osmuk.css");
+
+@import url("vendor/homepage.css");
+
+.osmuk-footer__copyright-logo::before { content: none; }
