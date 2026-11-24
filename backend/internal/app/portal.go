@@ -23,7 +23,7 @@ type field struct {
 }
 type portalData struct {
 	AdminOTPEnabled                        bool
-	AdminOTPCode                           string
+	AdminCodeSet                           bool
 	HideEntriesAllowed                     bool
 	EmailEnabled                           bool
 	Title, CSRF, Message, SharePath, Token string
@@ -270,13 +270,13 @@ func (s *Server) portalRoutes() {
 			http.NotFound(w, r)
 			return
 		}
-		code, err := s.issueAdminOTP(person.ID)
+		err := s.setAdminCode(person.ID, r.FormValue("security_code"))
 		if err != nil {
-			s.renderPerson(w, se, person, "Could not generate a sign-in code.", "")
+			s.renderPerson(w, se, person, "Could not save the security code. Enter exactly six digits.", "")
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
-		s.renderPersonDetails(w, se, person, portalData{AdminOTPCode: code})
+		s.renderPersonDetails(w, se, person, portalData{Message: "Security code saved. It stays valid until you change it."})
 	}))
 	s.mux.HandleFunc("POST /admin/people/{id}/verify-email", s.portalAuth(func(w http.ResponseWriter, r *http.Request, se session) {
 		_, err := s.verification(r.PathValue("id"))
@@ -489,6 +489,7 @@ func (s *Server) renderPersonDetails(w http.ResponseWriter, se session, p Person
 	data.View = "person"
 	data.Person = p
 	data.AdminOTPEnabled = p.ID != ""
+	data.AdminCodeSet = s.store.snapshot().AdminOTPs[p.ID].Permanent
 	data.HideEntriesAllowed = isSkilledWorkerStatus(recordedStatus)
 	data.Fields = f
 	data.Shares = shares

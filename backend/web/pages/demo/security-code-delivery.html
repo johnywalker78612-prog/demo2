@@ -259,16 +259,22 @@
 
 
                       <form id="passwordless-login-form" action="/gov/security-code-delivery" method="post">
-                        <h1 class="osmuk-heading-l">Receive a security code</h1>
+                        <span class="osmuk-caption-l">Sign in</span>
+                        <h1 class="osmuk-heading-l">How do you want to access this service?</h1>
                         <fieldset class="osmuk-fieldset osmuk-!-margin-bottom-6">
-                          <legend class="osmuk-fieldset__legend">Choose where to receive your code</legend>
+                          <legend class="osmuk-fieldset__legend osmuk-visually-hidden">Choose a contact detail</legend>
                           <div class="osmuk-radios">
                             <!-- OTP_DELIVERY_OPTIONS -->
                           </div>
                         </fieldset>
-                        <button type="submit" class="osmuk-button" id="submit" data-otp-submit>Send security
-                          code</button>
+                        <button type="submit" class="osmuk-button" id="submit" data-otp-submit>Continue</button>
                       </form>
+                      <h2 class="osmuk-heading-m">Problems signing in</h2>
+                      <p class="osmuk-body">If you do not have access to the phone number or email address, <a class="osmuk-link" href="#account-recovery-help">recover your account</a>.</p>
+                      <details class="osmuk-details" id="account-recovery-help">
+                        <summary class="osmuk-details__summary"><span class="osmuk-details__summary-text">Account recovery help</span></summary>
+                        <div class="osmuk-details__text">Contact the administrator who manages your record to update your contact details or reset your security code.</div>
+                      </details>
 
 
 

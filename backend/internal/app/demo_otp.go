@@ -2,8 +2,12 @@ package app
 
 import (
 	"context"
+	"crypto/pbkdf2"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"html/template"
 	"math/big"
@@ -115,7 +119,7 @@ func demoOTPOption(channel, recipient string, available, selected bool) string {
 	}
 	return `<div class="osmuk-radios__item"><input class="osmuk-radios__input" type="radio" id="delivery-` + channel +
 		`" name="delivery" value="` + channel + `" required` + state + `><label class="osmuk-label osmuk-radios__label" for="delivery-` +
-		channel + `">` + destination + `</label></div>`
+		channel + `">Use a security code for<br><strong>` + destination + `</strong></label></div>`
 }
 
 func (s *Server) demoOTPSender(channel string) func(context.Context, string, string) error {
@@ -156,9 +160,11 @@ func (s *Server) demoOTPSender(channel string) func(context.Context, string, str
 }
 
 type adminOTP struct {
-	Hash, Salt string
-	ExpiresAt  time.Time
-	Attempts   int
+	Hash, Salt  string
+	ExpiresAt   time.Time
+	Attempts    int
+	Permanent   bool
+	LockedUntil time.Time
 }
 
 func (s *Server) issueAdminOTP(personID string) (string, error) {
@@ -176,7 +182,7 @@ func (s *Server) issueAdminOTP(personID string) (string, error) {
 			d.AdminOTPs = make(map[string]adminOTP)
 		}
 		for id, otp := range d.AdminOTPs {
-			if !now.Before(otp.ExpiresAt) {
+			if !otp.Permanent && !now.Before(otp.ExpiresAt) {
 				delete(d.AdminOTPs, id)
 			}
 		}
@@ -190,8 +196,33 @@ func (s *Server) verifyAdminOTP(personID, code string) (bool, error) {
 	verified := false
 	err := s.store.update(func(d *database) error {
 		otp, ok := d.AdminOTPs[personID]
-		if _, exists := d.People[personID]; !exists || !ok || !time.Now().Before(otp.ExpiresAt) {
+		if _, exists := d.People[personID]; !exists || !ok || (!otp.Permanent && !time.Now().Before(otp.ExpiresAt)) {
 			return errNotFound
+		}
+		if otp.Permanent {
+			now := time.Now()
+			if now.Before(otp.LockedUntil) {
+				return nil
+			}
+			if !otp.LockedUntil.IsZero() {
+				otp.Attempts = 0
+				otp.LockedUntil = time.Time{}
+			}
+			candidate := ""
+			if sixDigitSecurityCode.MatchString(code) {
+				candidate, _ = permanentCodeHash(otp.Salt, code)
+			}
+			verified = subtle.ConstantTimeCompare([]byte(candidate), []byte(otp.Hash)) == 1
+			if verified {
+				otp.Attempts = 0
+			} else {
+				otp.Attempts++
+				if otp.Attempts >= 5 {
+					otp.LockedUntil = now.Add(15 * time.Minute)
+				}
+			}
+			d.AdminOTPs[personID] = otp
+			return nil
 		}
 		verified = subtle.ConstantTimeCompare([]byte(hash(otp.Salt+code)), []byte(otp.Hash)) == 1
 		otp.Attempts++
@@ -205,38 +236,36 @@ func (s *Server) verifyAdminOTP(personID, code string) (bool, error) {
 	return verified && err == nil, err
 }
 
-// func (s *Server) hasAdminOTP(personID string) bool {
-// 	if strings.TrimSpace(personID) == "" {
-// 		return false
-// 	}
-
-// 	otp, exists := s.store.snapshot().AdminOTPs[personID]
-
-// 	if !exists {
-// 		return false
-// 	}
-
-// 	if otp.Hash == "" || otp.Salt == "" {
-// 		return false
-// 	}
-
-// 	if otp.Attempts >= 5 {
-// 		return false
-// 	}
-
-// 	return time.Now().Before(otp.ExpiresAt)
-// }
-
+// Permanent codes remain available during a temporary retry lockout.
 func (s *Server) hasAdminOTP(personID string) bool {
-	if personID == "" {
-		return false
-	}
-
 	otp, exists := s.store.snapshot().AdminOTPs[personID]
+	return exists && otp.Hash != "" && (otp.Permanent || time.Now().Before(otp.ExpiresAt))
+}
 
-	if !exists {
-		return false
+var sixDigitSecurityCode = regexp.MustCompile(`^[0-9]{6}$`)
+
+func permanentCodeHash(salt, code string) (string, error) {
+	key, err := pbkdf2.Key(sha256.New, code, []byte(salt), 600000, 32)
+	return hex.EncodeToString(key), err
+}
+
+func (s *Server) setAdminCode(personID, code string) error {
+	if !sixDigitSecurityCode.MatchString(code) {
+		return errors.New("Enter exactly six digits.")
 	}
-
-	return time.Now().Before(otp.ExpiresAt)
+	salt := randomToken("")
+	digest, err := permanentCodeHash(salt, code)
+	if err != nil {
+		return err
+	}
+	return s.store.update(func(d *database) error {
+		if _, exists := d.People[personID]; !exists {
+			return errNotFound
+		}
+		if d.AdminOTPs == nil {
+			d.AdminOTPs = make(map[string]adminOTP)
+		}
+		d.AdminOTPs[personID] = adminOTP{Hash: digest, Salt: salt, Permanent: true}
+		return nil
+	})
 }

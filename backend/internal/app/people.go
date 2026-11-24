@@ -256,6 +256,7 @@ func (s *Server) removePerson(id string) error {
 			return errNotFound
 		}
 		delete(d.People, id)
+		delete(d.AdminOTPs, id)
 		delete(d.Photos, id)
 		for sid, sh := range d.Shares {
 			if sh.PersonID == id {

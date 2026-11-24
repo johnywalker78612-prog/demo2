@@ -188,7 +188,7 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 			// ADMIN OTP FALLBACK:
 			// Let users enter an administrator code without a delivery provider.
 			// The administrator may generate the code after this page is opened.
-			if sender == nil {
+			if sender == nil || s.store.snapshot().AdminOTPs[p.ID].Permanent {
 				se.CodeChannel = "admin"
 				se.CodeRecipient = recipient
 				se.Challenge = ""
@@ -285,7 +285,7 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 				)
 
 				if err != nil || !verified {
-					demoError = "Invalid, expired, or already used administrator code."
+					demoError = "The security code is incorrect or temporarily locked. After five incorrect attempts, wait 15 minutes and try again."
 					break
 				}
 
@@ -411,8 +411,9 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Path == "/gov/security-code" {
 		if codeChannel == "admin" {
-			content = bytes.ReplaceAll(content, []byte("We requested a single-use, 6-digit security code for:"), []byte("Enter the administrator-provided code for:"))
-			content = bytes.ReplaceAll(content, []byte("It may take a few minutes to arrive. You need to use this code within 10 minutes or it will expire."), []byte("Administrator codes expire 24 hours after they are generated."))
+			content = bytes.ReplaceAll(content, []byte("Check for your security code"), []byte("Enter your security code"))
+			content = bytes.ReplaceAll(content, []byte("We requested a single-use, 6-digit security code for:"), []byte("Enter your 6-digit security code for:"))
+			content = bytes.ReplaceAll(content, []byte(`<p class="osmuk-body">It may take a few minutes to arrive. You need to use this code within 10 minutes or it will expire.</p>`), nil)
 			content = bytes.ReplaceAll(content, []byte(`<form action="/gov/security-code-delivery" method="post">`), []byte(`<form action="/gov/security-code-delivery" method="post" hidden>`))
 		}
 		if codeChannel != "admin" && s.hasAdminOTP(se.PersonID) {
@@ -420,7 +421,7 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 		}
 		if codeChannel == "email" && s.cfg.LocalOTPOutbox && !s.cfg.SMTP.enabled() {
 			if s.hasAdminOTP(se.PersonID) {
-				content = bytes.ReplaceAll(content, []byte("<!-- OTP_ADMIN_INLINE_NOTICE -->"), []byte(`<p class="osmuk-body">You can also enter your 24-hour administrator code here.</p>`))
+				content = bytes.ReplaceAll(content, []byte("<!-- OTP_ADMIN_INLINE_NOTICE -->"), []byte(`<p class="osmuk-body">You can also enter your saved security code here.</p>`))
 			}
 			content = bytes.ReplaceAll(content, []byte("<!-- OTP_LOCAL_NOTICE -->"), []byte(`<p class="osmuk-body">Local test mode. Get the code from the <a href="/admin/outbox">admin email outbox</a>. No email was sent.</p>`))
 		}

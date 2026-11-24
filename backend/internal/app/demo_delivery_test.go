@@ -317,7 +317,7 @@ func TestManualCodeWithoutDeliveryProvider(t *testing.T) {
 	}
 	page := request("GET", "/gov/security-code", nil)
 	want(t, page, 200)
-	if !strings.Contains(page.Body.String(), maskDemoOTPRecipient("email", p.Email)) || !strings.Contains(page.Body.String(), "administrator-provided") {
+	if !strings.Contains(page.Body.String(), maskDemoOTPRecipient("email", p.Email)) || strings.Contains(page.Body.String(), "administrator-provided") || strings.Contains(page.Body.String(), "Administrator codes expire") {
 		t.Fatal("missing masked address or manual instructions")
 	}
 	request("POST", "/gov/security-code", url.Values{"verificationCode": {"123456"}})
