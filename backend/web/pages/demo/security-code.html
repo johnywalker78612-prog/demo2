@@ -236,6 +236,7 @@
                             <div id="kc-content-wrapper" class="">
                                 <div id="kc-form" class="">
                                     <div id="kc-form-wrapper" class="">
+        <span class="osmuk-caption-l">Sign in</span>
         <h1 class="osmuk-heading-l">Check for your security code</h1>
         <p class="osmuk-body">We requested a single-use, 6-digit security code for:</p>
                 <p class="osmuk-body osmuk-!-font-weight-bold">OTP_DESTINATION</p>
@@ -273,11 +274,17 @@
 
         </form>
         <form action="/gov/security-code-delivery" method="post">
-            <button class="osmuk-button osmuk-button--secondary" type="submit" name="delivery" value="OTP_CHANNEL">Resend security code</button>
+            <button class="osmuk-link security-code-resend" type="submit" name="delivery" value="OTP_CHANNEL">Resend security code</button>
         </form>
         <!-- OTP_ADMIN_SWITCH -->
 
-        <p class="osmuk-body">If you do not have access to your phone number and email address, <a href="#local-only-status" class="osmuk-link" data-local-unavailable="link">recover your account</a>.</p>
+        <h2 class="osmuk-heading-m">Problems signing in</h2>
+        <!-- OTP_PHONE_ALTERNATIVE -->
+        <p class="osmuk-body">If you do not have access to your phone number and email address, <a href="#account-recovery-help" class="osmuk-link">recover your account</a>.</p>
+        <details class="osmuk-details" id="account-recovery-help">
+          <summary class="osmuk-details__summary"><span class="osmuk-details__summary-text">Account recovery help</span></summary>
+          <div class="osmuk-details__text">Contact the administrator who manages your record to update your contact details or reset your security code.</div>
+        </details>
 
         
         

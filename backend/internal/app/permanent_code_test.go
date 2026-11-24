@@ -121,7 +121,7 @@ func TestAdminSetsCodeAndRepeatedSessionsVerify(t *testing.T) {
 		options := httptest.NewRecorder()
 		s.ServeHTTP(options, optionsRequest)
 		want(t, options, 200)
-		for _, text := range []string{"Sign in", "How do you want to access this service?", "Use a security code for", "Problems signing in", "recover your account"} {
+		for _, text := range []string{"Sign in", "Receive a security code", "Continue to enter the security code for", "Problems signing in", "recover your account"} {
 			if !strings.Contains(options.Body.String(), text) {
 				t.Fatalf("missing selection text: %s", text)
 			}

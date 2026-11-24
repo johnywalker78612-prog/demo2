@@ -140,6 +140,9 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 			available := true
 
 			selected := available && defaultDelivery == ""
+			if r.URL.Query().Get("delivery") == "sms" && demoOTPRecipient(p, "sms") != "" {
+				selected = channel == "sms"
+			}
 
 			if selected {
 				defaultDelivery = channel
@@ -272,6 +275,11 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 				codeDestination = maskDemoOTPRecipient("email", recipient)
 			}
 
+			person := s.store.snapshot().People[se.PersonID]
+			if phone := demoOTPRecipient(person, "sms"); phone != "" && se.CodeRecipient == phone {
+				codeDestination = maskDemoOTPRecipient("sms", phone)
+			}
+
 			if r.Method == http.MethodPost {
 
 				code := strings.TrimSpace(
@@ -391,16 +399,24 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Path == "/gov/security-code-delivery" {
 
+		description := ""
 		if defaultDelivery != "" {
 			content = enableDemoSubmitButton(content)
+			p := s.store.snapshot().People[se.PersonID]
+			destination := template.HTMLEscapeString(maskDemoOTPRecipient(defaultDelivery, demoOTPRecipient(p, defaultDelivery)))
+			prefix := "Continue to enter the security code for "
+			if !s.store.snapshot().AdminOTPs[p.ID].Permanent && s.demoOTPSender(defaultDelivery) != nil && !(defaultDelivery == "email" && !s.cfg.SMTP.enabled()) {
+				prefix = "We will send a security code to "
+			}
+			description = `<p class="osmuk-body osmuk-!-margin-bottom-6">` + prefix + `<strong>` + destination + `</strong>.</p>`
 		}
-
+		if defaultDelivery == "" {
+			description = `<p class="osmuk-body">No valid contact details are available for this record.</p>`
+		}
 		if demoError != "" {
-			deliveryOptions =
-				`<p class="osmuk-body" role="alert">` +
-					template.HTMLEscapeString(demoError) +
-					"</p>" + deliveryOptions
+			description = `<p class="osmuk-body" role="alert">` + template.HTMLEscapeString(demoError) + `</p>` + description
 		}
+		content = bytes.ReplaceAll(content, []byte("<!-- OTP_DELIVERY_DESCRIPTION -->"), []byte(description))
 
 		content = bytes.ReplaceAll(
 			content,
@@ -410,6 +426,14 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.URL.Path == "/gov/security-code" {
+		p := s.store.snapshot().People[se.PersonID]
+		if demoOTPRecipient(p, "sms") != "" && codeChannel != "sms" {
+			content = bytes.ReplaceAll(content, []byte("<!-- OTP_PHONE_ALTERNATIVE -->"), []byte(`<p class="osmuk-body">If you do not have access to this email address, <a class="osmuk-link" href="/gov/security-code-delivery?delivery=sms">use your phone number instead</a>.</p>`))
+		}
+		if codeChannel == "email" && s.cfg.SMTP.enabled() {
+			content = bytes.ReplaceAll(content, []byte("Check for your security code"), []byte("Check your email"))
+			content = bytes.ReplaceAll(content, []byte("We requested a single-use, 6-digit security code for:"), []byte("We have sent you a single-use, 6-digit security code by email to:"))
+		}
 		if codeChannel == "admin" {
 			content = bytes.ReplaceAll(content, []byte("Check for your security code"), []byte("Enter your security code"))
 			content = bytes.ReplaceAll(content, []byte("We requested a single-use, 6-digit security code for:"), []byte("Enter your 6-digit security code for:"))

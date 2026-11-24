@@ -6,7 +6,7 @@
     content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; form-action 'self'; base-uri 'none'; object-src 'none'; frame-src 'none';">
   <script src="/assets/js/local-only.js"></script>
   <meta charset="utf-8">
-  <title>How do you want to access this service?
+  <title>Receive a security code
   </title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#1d70b8">
@@ -260,8 +260,9 @@
 
                       <form id="passwordless-login-form" action="/gov/security-code-delivery" method="post">
                         <span class="osmuk-caption-l">Sign in</span>
-                        <h1 class="osmuk-heading-l">How do you want to access this service?</h1>
-                        <fieldset class="osmuk-fieldset osmuk-!-margin-bottom-6">
+                        <h1 class="osmuk-heading-l">Receive a security code</h1>
+                        <!-- OTP_DELIVERY_DESCRIPTION -->
+                        <fieldset class="osmuk-fieldset" hidden>
                           <legend class="osmuk-fieldset__legend osmuk-visually-hidden">Choose a contact detail</legend>
                           <div class="osmuk-radios">
                             <!-- OTP_DELIVERY_OPTIONS -->
@@ -270,7 +271,7 @@
                         <button type="submit" class="osmuk-button" id="submit" data-otp-submit>Continue</button>
                       </form>
                       <h2 class="osmuk-heading-m">Problems signing in</h2>
-                      <p class="osmuk-body">If you do not have access to the phone number or email address, <a class="osmuk-link" href="#account-recovery-help">recover your account</a>.</p>
+                      <p class="osmuk-body">If you do not have access to the phone number and email address, <a class="osmuk-link" href="#account-recovery-help">recover your account</a>.</p>
                       <details class="osmuk-details" id="account-recovery-help">
                         <summary class="osmuk-details__summary"><span class="osmuk-details__summary-text">Account recovery help</span></summary>
                         <div class="osmuk-details__text">Contact the administrator who manages your record to update your contact details or reset your security code.</div>

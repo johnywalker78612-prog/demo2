@@ -3,3 +3,5 @@
 
 .osmuk-footer__copyright-logo::before { content: none; }
 .osmuk-footer__crest { display: block; width: 125px; height: 102px; margin: 0 auto 10px; }
+
+.security-code-resend { background: none; border: 0; padding: 0; color: #1d70b8; font: inherit; font-size: 19px; text-decoration: underline; cursor: pointer; margin: 10px 0 30px; }
