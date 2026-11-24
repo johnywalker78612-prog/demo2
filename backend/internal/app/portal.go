@@ -48,6 +48,11 @@ var portalCSS string
 //go:embed templates/photo-editor.js
 var photoEditorJS string
 var portal = template.Must(template.New("portal").Funcs(template.FuncMap{
+	// Only a bounded integer is interpolated into this trusted style attribute.
+	"barHeight": func(height int) template.HTMLAttr {
+		height = max(0, min(100, height))
+		return template.HTMLAttr(fmt.Sprintf(`style="height:%d%%"`, height))
+	},
 	"date": func(t time.Time) string { return t.In(reportLocation).Format("02 Jan 2006") },
 	"initial": func(p Person) string {
 		r := []rune(p.FirstName)
