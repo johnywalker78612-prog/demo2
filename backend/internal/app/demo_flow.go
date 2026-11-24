@@ -126,18 +126,27 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 			defaultDelivery = "admin"
 			deliveryOptions = `<div class="osmuk-radios__item"><input class="osmuk-radios__input" type="radio" id="delivery-admin" name="delivery" value="admin" required checked><label class="osmuk-label osmuk-radios__label" for="delivery-admin">Use a code from your administrator</label></div>`
 		}
+
 		for _, channel := range []string{"email", "sms"} {
 			recipient := demoOTPRecipient(p, channel)
 			if recipient == "" {
 				continue
 			}
-			// available := s.demoOTPSender(channel) != nil
-			available := true
+
+			// Check whether the delivery provider is actually configured.
+			available := s.demoOTPSender(channel) != nil
+
 			selected := available && defaultDelivery == ""
 			if selected {
 				defaultDelivery = channel
 			}
-			deliveryOptions += demoOTPOption(channel, recipient, available, selected)
+
+			deliveryOptions += demoOTPOption(
+				channel,
+				recipient,
+				available,
+				selected,
+			)
 		}
 
 		if deliveryOptions == "" {
@@ -272,17 +281,33 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
 	if r.URL.Path == "/gov/security-code-delivery" {
-		buttonState := ""
-		// if defaultDelivery == "" {
-		// 	buttonState = "disabled"
-		// }
-		content = bytes.ReplaceAll(content, []byte(`data-otp-submit`), []byte(buttonState))
-		if demoError != "" {
-			deliveryOptions = `<p class="osmuk-body" role="alert">` + template.HTMLEscapeString(demoError) + "</p>" + deliveryOptions
+		buttonState := "disabled"
+
+		if defaultDelivery != "" {
+			buttonState = ""
 		}
-		content = bytes.ReplaceAll(content, []byte("<!-- OTP_DELIVERY_OPTIONS -->"), []byte(deliveryOptions))
+
+		content = bytes.ReplaceAll(
+			content,
+			[]byte(`data-otp-submit`),
+			[]byte(buttonState),
+		)
+
+		if demoError != "" {
+			deliveryOptions = `<p class="osmuk-body" role="alert">` +
+				template.HTMLEscapeString(demoError) +
+				"</p>" + deliveryOptions
+		}
+
+		content = bytes.ReplaceAll(
+			content,
+			[]byte("<!-- OTP_DELIVERY_OPTIONS -->"),
+			[]byte(deliveryOptions),
+		)
 	}
+
 	if r.URL.Path == "/gov/security-code" {
 		if codeChannel == "admin" {
 			content = bytes.ReplaceAll(content, []byte("We requested a single-use, 6-digit security code for:"), []byte("Enter the single-use code provided by:"))
