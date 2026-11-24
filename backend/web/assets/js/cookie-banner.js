@@ -2,7 +2,7 @@
     'use strict';
 
     const storageKey = 'local-site-cookie-choice';
-    const banners = document.querySelectorAll('.osmuk-cookie-banner, .govuk-cookie-banner');
+    const bannerSelector = '.osmuk-cookie-banner, .govuk-cookie-banner';
     const acceptSelector = '[data-accept-cookies], .cc-accept';
     const rejectSelector = '[data-reject-cookies], .cc-reject';
     let currentChoice = readChoice();
@@ -26,7 +26,7 @@
 
     function updateBanners() {
         const decided = currentChoice === 'accepted' || currentChoice === 'rejected';
-        banners.forEach(function (banner) {
+        document.querySelectorAll(bannerSelector).forEach(function (banner) {
             setVisible(banner, !decided);
             Array.from(banner.children).forEach(function (message) {
                 if (!message.classList.contains('osmuk-cookie-banner__message') && !message.classList.contains('govuk-cookie-banner__message')) return;
@@ -36,31 +36,37 @@
         });
     }
 
-    banners.forEach(function (banner) {
-        banner.addEventListener('click', function (event) {
-            const button = event.target.closest(acceptSelector + ', ' + rejectSelector);
-            if (!button || !banner.contains(button)) return;
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            currentChoice = button.matches(acceptSelector) ? 'accepted' : 'rejected';
-            try {
-                localStorage.setItem(storageKey, currentChoice);
-            } catch (_) {
-                // The banner still closes when browser storage is unavailable.
+    // Delegate to the document so newly rendered banners work too.
+    document.addEventListener('click', function (event) {
+        const target = event.target instanceof Element ? event.target : event.target.parentElement;
+        if (!target) return;
+        const button = target.closest(acceptSelector + ', ' + rejectSelector);
+        if (!button || !button.closest(bannerSelector)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        currentChoice = button.matches(acceptSelector) ? 'accepted' : 'rejected';
+        // Hide immediately, even if browser storage is blocked.
+        updateBanners();
+        try {
+            localStorage.setItem(storageKey, currentChoice);
+        } catch (_) {
+            // The in-memory choice still applies for this page.
+        }
+        const nextContent = document.querySelector('main, [role="main"], h1');
+        if (nextContent) {
+            if (!nextContent.hasAttribute('tabindex')) {
+                nextContent.setAttribute('tabindex', '-1');
+                nextContent.addEventListener('blur', function () {
+                    nextContent.removeAttribute('tabindex');
+                }, { once: true });
             }
-            updateBanners();
-            const nextContent = document.querySelector('main, [role="main"], h1');
-            if (nextContent) {
-                if (!nextContent.hasAttribute('tabindex')) {
-                    nextContent.setAttribute('tabindex', '-1');
-                    nextContent.addEventListener('blur', function () {
-                        nextContent.removeAttribute('tabindex');
-                    }, { once: true });
-                }
-                nextContent.focus({ preventScroll: true });
-            }
-        }, true);
-    });
+            nextContent.focus({ preventScroll: true });
+        }
+    }, true);
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', updateBanners, { once: true });
+    }
 
     updateBanners();
     window.addEventListener('pageshow', function (event) {
