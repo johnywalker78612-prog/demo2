@@ -30,7 +30,7 @@ func privateRecordPDF(data map[string]any) ([]byte, error) {
 		p.SetY(42)
 		p.SetTextColor(30, 47, 45)
 		p.SetFont("Private", "B", 11)
-		p.MultiCell(170, 6, "UNVERIFIED PRIVATE RECORD\nNot proof of immigration status", "", "L", false)
+		p.MultiCell(170, 6, "", "", "L", false)
 		p.Ln(6)
 	})
 	p.SetFooterFunc(func() {

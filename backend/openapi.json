@@ -929,7 +929,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Private Records PDF; not proof of immigration status",
+            "description": "",
             "content": {
               "application/pdf": {
                 "schema": {

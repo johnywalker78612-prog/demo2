@@ -51,6 +51,7 @@ func passportEnding(value string) string {
 	}
 	return string(r[len(r)-4:])
 }
+
 func renderEmail(d emailData) (string, string, error) {
 	var b bytes.Buffer
 	if err := emailTemplate.Execute(&b, d); err != nil {
@@ -63,7 +64,7 @@ func renderEmail(d emailData) (string, string, error) {
 	if d.Code != "" {
 		text += "\nYour Private Records security code: " + d.Code + "\nExpires in 10 minutes. Single use. Do not share it.\n"
 	}
-	text += "\n" + d.Explanation + "\n\n" + d.Action + ": " + d.URL + "\n\n" + d.Closing + "\n\nRegards,\nPrivate Records\n\nUnverified private record - not proof of immigration status.\n" + Disclaimer
+	text += "\n" + d.Explanation + "\n\n" + d.Action + ": " + d.URL + "\n\n" + d.Closing + "\n\nRegards,\nPrivate Records\n\n" + Disclaimer
 	return text, b.String(), nil
 }
 func validateMailConfig(cfg *Config) error {

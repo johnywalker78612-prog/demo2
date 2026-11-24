@@ -322,8 +322,7 @@
       </table>
     </div>
   </section>{{end}}
-  {{if eq .View "shared"}}<p class="notice"><strong>Unverified private record - not proof of immigration
-      status.</strong></p>
+  {{if eq .View "shared"}}
   <div class="export-actions"><a class="button" href="/shared/{{.Token}}/pdf">Download private-record PDF</a> <button
       type="button" data-print-record>Print private record</button></div>
   <section>{{range $key,$value:=.Shared}}<p><strong>{{$key}}</strong><br>{{$value}}</p>{{end}}</section>{{end}}
