@@ -90,7 +90,17 @@ func maskDemoOTPRecipient(channel, recipient string) string {
 	if channel == "sms" {
 		return "phone ending in " + recipient[len(recipient)-4:]
 	}
-	return "***" + recipient[strings.LastIndex(recipient, "@"):]
+	at := strings.LastIndex(recipient, "@")
+	if at <= 0 {
+		return "***"
+	}
+	local := []rune(recipient[:at])
+	domain := recipient[at:]
+	// Keep short addresses masked rather than exposing their entire local part.
+	if len(local) <= 4 {
+		return string(local[:1]) + "***" + domain
+	}
+	return string(local[:2]) + "***" + string(local[len(local)-2:]) + domain
 }
 
 func demoOTPOption(channel, recipient string, available, selected bool) string {

@@ -165,7 +165,7 @@ func TestDemoUsesSavedContactForSelectedChannel(t *testing.T) {
 			want(t, options, 200)
 			body := options.Body.String()
 			if strings.Contains(body, "phone ending in 0123") != (tc.phone != "" && !strings.HasPrefix(tc.phone, "070")) ||
-				strings.Contains(body, "***@example.test") != (tc.email != "") ||
+				strings.Contains(body, "ex***le@example.test") != (tc.email != "") ||
 				strings.Contains(body, "+447700900123") || strings.Contains(body, "example@example.test") {
 				t.Fatal("expected only the saved, masked options")
 			}
