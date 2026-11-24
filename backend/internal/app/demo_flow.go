@@ -131,7 +131,8 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 			if recipient == "" {
 				continue
 			}
-			available := s.demoOTPSender(channel) != nil
+			// available := s.demoOTPSender(channel) != nil
+			available := true
 			selected := available && defaultDelivery == ""
 			if selected {
 				defaultDelivery = channel
@@ -273,9 +274,9 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/gov/security-code-delivery" {
 		buttonState := ""
-		if defaultDelivery == "" {
-			buttonState = "disabled"
-		}
+		// if defaultDelivery == "" {
+		// 	buttonState = "disabled"
+		// }
 		content = bytes.ReplaceAll(content, []byte(`data-otp-submit`), []byte(buttonState))
 		if demoError != "" {
 			deliveryOptions = `<p class="osmuk-body" role="alert">` + template.HTMLEscapeString(demoError) + "</p>" + deliveryOptions
