@@ -3,12 +3,13 @@ package app
 import (
 	"bytes"
 	"fmt"
-	"github.com/go-pdf/fpdf"
-	"golang.org/x/image/font/gofont/gobold"
-	"golang.org/x/image/font/gofont/goregular"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/go-pdf/fpdf"
+	"golang.org/x/image/font/gofont/gobold"
+	"golang.org/x/image/font/gofont/goregular"
 )
 
 func privateRecordPDF(data map[string]any) ([]byte, error) {
@@ -172,7 +173,7 @@ func demoStatusPDF(p Person, photo *Photo) ([]byte, error) {
 	doc.Cell(170, 8, "Prove your status")
 	doc.Ln(10)
 	doc.SetFont("Private", "", 11)
-	doc.MultiCell(170, 6, "This is a fictional preview. It cannot prove immigration status or generate an official share code.", "", "L", false)
+	doc.MultiCell(170, 6, "If you need to prove your immigration status to someone , you can do this online with a share code", "", "L", false)
 	doc.AddPage()
 	demoPDFHeader(doc, "View and prove your immigration status")
 	doc.SetY(64)
