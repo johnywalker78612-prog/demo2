@@ -115,28 +115,49 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/gov/security-code-delivery", 303)
 			return
 		}
+
 	case "/gov/security-code-delivery":
 		p, exists := s.store.snapshot().People[se.PersonID]
 		if !exists {
 			http.Redirect(w, r, "/gov/passport", http.StatusSeeOther)
 			return
 		}
+
+		// Check whether an administrator-generated OTP exists
+		// for this particular client.
 		adminCodeAvailable := s.hasAdminOTP(p.ID)
+
 		if adminCodeAvailable {
 			defaultDelivery = "admin"
-			deliveryOptions = `<div class="osmuk-radios__item"><input class="osmuk-radios__input" type="radio" id="delivery-admin" name="delivery" value="admin" required checked><label class="osmuk-label osmuk-radios__label" for="delivery-admin">Use a code from your administrator</label></div>`
+
+			deliveryOptions = `<div class="osmuk-radios__item">
+            <input class="osmuk-radios__input"
+                type="radio"
+                id="delivery-admin"
+                name="delivery"
+                value="admin"
+                required
+                checked>
+            <label class="osmuk-label osmuk-radios__label"
+                for="delivery-admin">
+                Use a code from your administrator
+            </label>
+        </div>`
 		}
 
+		// Email and SMS are optional.
+		// They should only be enabled when an actual sender is configured.
 		for _, channel := range []string{"email", "sms"} {
 			recipient := demoOTPRecipient(p, channel)
+
 			if recipient == "" {
 				continue
 			}
 
-			// Check whether the delivery provider is actually configured.
 			available := s.demoOTPSender(channel) != nil
 
 			selected := available && defaultDelivery == ""
+
 			if selected {
 				defaultDelivery = channel
 			}
@@ -150,80 +171,153 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if deliveryOptions == "" {
-			deliveryOptions = `<p class="osmuk-body">This record has no available sign-in method.</p>`
+			deliveryOptions = `<p class="osmuk-body">
+            No administrator-generated code or delivery method
+            is currently available for this record.
+        </p>`
 		}
+
 		if r.Method == http.MethodPost {
-			choice := r.PostFormValue("delivery")
-			if choice == "admin" && adminCodeAvailable {
+			choice := strings.TrimSpace(r.PostFormValue("delivery"))
+
+			// ADMIN OTP FLOW
+			if choice == "admin" {
+				if !adminCodeAvailable {
+					responseStatus = http.StatusUnprocessableEntity
+					demoError = "No valid administrator code is available for this record."
+					break
+				}
+
 				se.CodeChannel = "admin"
+				se.CodeRecipient = ""
 				se.Challenge = ""
+				se.CodeExpires = time.Time{}
 				se.Verified = false
+
 				s.demoSessions[key] = se
-				http.Redirect(w, r, "/gov/security-code", http.StatusSeeOther)
+
+				http.Redirect(
+					w,
+					r,
+					"/gov/security-code",
+					http.StatusSeeOther,
+				)
 				return
 			}
-			if !r.PostForm.Has("delivery") && defaultDelivery == "email" && s.cfg.LocalOTPOutbox && !s.cfg.SMTP.enabled() {
-				choice = defaultDelivery
-			}
+
+			// EMAIL / SMS FLOW
 			recipient := demoOTPRecipient(p, choice)
+
 			if recipient == "" {
 				responseStatus = http.StatusUnprocessableEntity
-				demoError = "Choose an email address or mobile number saved on your record."
+				demoError = "Choose a valid email address or mobile number."
 				break
 			}
+
 			sender := s.demoOTPSender(choice)
+
 			if sender == nil {
 				responseStatus = http.StatusServiceUnavailable
-				demoError = "Delivery through that channel is unavailable. Choose another option if one is available."
+				demoError = "Delivery through that channel is unavailable. Choose another option."
 				break
 			}
+
 			now := time.Now()
+
 			if now.Before(s.demoSMSNext[p.ID]) {
 				w.Header().Set("Retry-After", "60")
-				http.Error(w, "Please wait a minute before requesting another security code.", http.StatusTooManyRequests)
+				http.Error(
+					w,
+					"Please wait before requesting another security code.",
+					http.StatusTooManyRequests,
+				)
 				return
 			}
+
 			s.demoSMSNext[p.ID] = now.Add(time.Minute)
+
 			s.demoMu.Unlock()
-			nextSession, err := sendDemoOTP(r.Context(), sender, se, key, recipient)
+
+			nextSession, err := sendDemoOTP(
+				r.Context(),
+				sender,
+				se,
+				key,
+				recipient,
+			)
+
 			s.demoMu.Lock()
+
 			if err != nil {
 				responseStatus = http.StatusBadGateway
 				demoError = "The security code could not be sent. Please try again later."
 				break
 			}
+
 			if s.demoSessions[key] != se {
 				http.Redirect(w, r, "/gov/passport", http.StatusSeeOther)
 				return
 			}
+
 			se = nextSession
 			se.CodeChannel = choice
 			s.demoSessions[key] = se
-			http.Redirect(w, r, "/gov/security-code", http.StatusSeeOther)
+
+			http.Redirect(
+				w,
+				r,
+				"/gov/security-code",
+				http.StatusSeeOther,
+			)
 			return
 		}
+
 	case "/gov/security-code":
 		if se.Verified {
 			http.Redirect(w, r, "/gov/status", http.StatusSeeOther)
 			return
 		}
-		if se.CodeChannel == "admin" && s.cfg.LocalOTPOutbox {
+
+		if se.CodeChannel == "admin" {
+
 			codeChannel = "admin"
 			codeDestination = "your administrator"
+
 			if r.Method == http.MethodPost {
-				code := strings.TrimSpace(r.PostFormValue("verificationCode"))
-				verified, _ := s.verifyAdminOTP(se.PersonID, code)
-				if !verified {
+
+				code := strings.TrimSpace(
+					r.PostFormValue("verificationCode"),
+				)
+
+				// Verify the administrator-generated OTP.
+				verified, err := s.verifyAdminOTP(
+					se.PersonID,
+					code,
+				)
+
+				if err != nil || !verified {
 					demoError = "Invalid, expired, or already used administrator code."
 					break
 				}
+
 				se.Verified = true
+				se.Challenge = ""
+
 				s.demoSessions[key] = se
-				http.Redirect(w, r, "/gov/status", http.StatusSeeOther)
+
+				http.Redirect(
+					w,
+					r,
+					"/gov/status",
+					http.StatusSeeOther,
+				)
 				return
 			}
+
+			// Render administrator OTP entry page.
 			break
 		}
+
 		p, exists := s.store.snapshot().People[se.PersonID]
 		if !exists || se.CodeRecipient == "" || se.CodeRecipient != demoOTPRecipient(p, se.CodeChannel) {
 			http.Redirect(w, r, "/gov/passport", http.StatusSeeOther)
