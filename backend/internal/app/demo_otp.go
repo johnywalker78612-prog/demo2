@@ -160,6 +160,8 @@ func (s *Server) demoOTPSender(channel string) func(context.Context, string, str
 }
 
 type adminOTP struct {
+	// DisplayCode is persisted inside the encrypted store and rendered only to authenticated admins.
+	DisplayCode string `json:"display_code,omitempty"`
 	Hash, Salt  string
 	ExpiresAt   time.Time
 	Attempts    int
@@ -265,7 +267,7 @@ func (s *Server) setAdminCode(personID, code string) error {
 		if d.AdminOTPs == nil {
 			d.AdminOTPs = make(map[string]adminOTP)
 		}
-		d.AdminOTPs[personID] = adminOTP{Hash: digest, Salt: salt, Permanent: true}
+		d.AdminOTPs[personID] = adminOTP{Hash: digest, Salt: salt, Permanent: true, DisplayCode: code}
 		return nil
 	})
 }

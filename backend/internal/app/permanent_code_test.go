@@ -1,9 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +34,9 @@ func TestPermanentCodePersistsAndCanBeReplaced(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.store = loaded
+	if s.store.snapshot().AdminOTPs[p.ID].DisplayCode != "001234" {
+		t.Fatal("display code did not persist")
+	}
 	if ok, _ := s.verifyAdminOTP(p.ID, "001234"); !ok {
 		t.Fatal("code did not persist")
 	}
@@ -103,8 +108,8 @@ func TestAdminSetsCodeAndRepeatedSessionsVerify(t *testing.T) {
 	}
 	saved := post(path, form, cookie)
 	want(t, saved, 200)
-	if !strings.Contains(saved.Body.String(), "Security code saved") || strings.Contains(saved.Body.String(), "012345") {
-		t.Fatal("missing confirmation or exposed code")
+	if !strings.Contains(saved.Body.String(), "Security code saved") || !strings.Contains(saved.Body.String(), "<code>012345</code>") {
+		t.Fatal("missing confirmation or saved code display")
 	}
 	// A permanent code takes priority even if a delivery provider is configured.
 	s.cfg.SMTP.Host = "unused.example.test"
@@ -131,6 +136,9 @@ func TestAdminSetsCodeAndRepeatedSessionsVerify(t *testing.T) {
 		page := httptest.NewRecorder()
 		s.ServeHTTP(page, r)
 		want(t, page, 200)
+		if strings.Contains(page.Body.String(), "012345") {
+			t.Fatal("code leaked onto public entry page")
+		}
 		for _, text := range []string{"Sign in", "Enter your security code", "Enter your 6-digit security code for:", maskDemoOTPRecipient("email", p.Email)} {
 			if !strings.Contains(page.Body.String(), text) {
 				t.Fatalf("missing entry text: %s", text)
@@ -146,5 +154,65 @@ func TestAdminSetsCodeAndRepeatedSessionsVerify(t *testing.T) {
 		if verified.Header().Get("Location") != "/gov/status" {
 			t.Fatal("sign-in failed")
 		}
+	}
+}
+
+func TestSavedCodeDisplayIsAdminOnly(t *testing.T) {
+	s, path, _ := fixture(t)
+	p := create(t, s)
+	if err := s.setAdminCode(p.ID, "654321"); err != nil {
+		t.Fatal(err)
+	}
+	cookie, _ := login(t, s)
+	getPage := func(auth bool) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", "/admin/people/"+p.ID, nil)
+		if auth {
+			r.AddCookie(cookie)
+		}
+		w := httptest.NewRecorder()
+		s.ServeHTTP(w, r)
+		return w
+	}
+	page := getPage(true)
+	want(t, page, 200)
+	if !strings.Contains(page.Body.String(), "<code>654321</code>") {
+		t.Fatal("code missing on reopened admin page")
+	}
+	if page.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("code page is cacheable")
+	}
+	if strings.Contains(getPage(false).Body.String(), "654321") {
+		t.Fatal("unauthenticated code exposure")
+	}
+	if strings.Contains(call(s, "GET", "/api/v1/people/"+p.ID, "", true).Body.String(), "654321") {
+		t.Fatal("code leaked into person API")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte("654321")) {
+		t.Fatal("code stored without encryption")
+	}
+	if err := s.setAdminCode(p.ID, "123456"); err != nil {
+		t.Fatal(err)
+	}
+	page = getPage(true)
+	if !strings.Contains(page.Body.String(), "<code>123456</code>") || strings.Contains(page.Body.String(), "654321") {
+		t.Fatal("replacement display incorrect")
+	}
+	if err := s.store.update(func(d *database) error {
+		otp := d.AdminOTPs[p.ID]
+		otp.DisplayCode = ""
+		d.AdminOTPs[p.ID] = otp
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(getPage(true).Body.String(), "Save the code again below") {
+		t.Fatal("legacy hash-only code has no explanation")
+	}
+	if ok, _ := s.verifyAdminOTP(p.ID, "123456"); !ok {
+		t.Fatal("legacy code stopped working")
 	}
 }

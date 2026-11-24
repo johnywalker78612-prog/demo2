@@ -24,6 +24,7 @@ type field struct {
 type portalData struct {
 	AdminOTPEnabled                        bool
 	AdminCodeSet                           bool
+	SavedSecurityCode                      string
 	HideEntriesAllowed                     bool
 	EmailEnabled                           bool
 	Title, CSRF, Message, SharePath, Token string
@@ -494,7 +495,11 @@ func (s *Server) renderPersonDetails(w http.ResponseWriter, se session, p Person
 	data.View = "person"
 	data.Person = p
 	data.AdminOTPEnabled = p.ID != ""
-	data.AdminCodeSet = s.store.snapshot().AdminOTPs[p.ID].Permanent
+	savedCode := s.store.snapshot().AdminOTPs[p.ID]
+	data.AdminCodeSet = savedCode.Permanent
+	if savedCode.Permanent {
+		data.SavedSecurityCode = savedCode.DisplayCode
+	}
 	data.HideEntriesAllowed = isSkilledWorkerStatus(recordedStatus)
 	data.Fields = f
 	data.Shares = shares
