@@ -203,14 +203,7 @@
                 This code is valid until <span id="today-date"></span>
               </p>
 
-              <script>
-                document.getElementById("today-date").textContent =
-                  new Date().toLocaleDateString("en-GB", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric"
-                  });
-              </script>
+
             </div>
             <h2 class="govuk-heading-m">What to do next</h2>
 
@@ -333,6 +326,7 @@
 
   <script src="/assets/js/local-only.js"></script>
   <script src="/assets/js/cookie-banner.js"></script>
+<script src="/assets/js/share-date.js"></script>
 </body>
 
 </html>
