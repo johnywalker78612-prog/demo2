@@ -16,8 +16,6 @@ import (
 	"time"
 )
 
-const Disclaimer = "Private, unverified record. Not a government service, immigration decision, or proof of immigration status."
-
 var errNotFound = errors.New("record not found")
 
 type Config struct {
