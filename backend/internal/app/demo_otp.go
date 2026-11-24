@@ -195,22 +195,36 @@ func (s *Server) verifyAdminOTP(personID, code string) (bool, error) {
 	return verified && err == nil, err
 }
 
+// func (s *Server) hasAdminOTP(personID string) bool {
+// 	if strings.TrimSpace(personID) == "" {
+// 		return false
+// 	}
+
+// 	otp, exists := s.store.snapshot().AdminOTPs[personID]
+
+// 	if !exists {
+// 		return false
+// 	}
+
+// 	if otp.Hash == "" || otp.Salt == "" {
+// 		return false
+// 	}
+
+// 	if otp.Attempts >= 5 {
+// 		return false
+// 	}
+
+// 	return time.Now().Before(otp.ExpiresAt)
+// }
+
 func (s *Server) hasAdminOTP(personID string) bool {
-	if strings.TrimSpace(personID) == "" {
+	if personID == "" {
 		return false
 	}
 
 	otp, exists := s.store.snapshot().AdminOTPs[personID]
 
 	if !exists {
-		return false
-	}
-
-	if otp.Hash == "" || otp.Salt == "" {
-		return false
-	}
-
-	if otp.Attempts >= 5 {
 		return false
 	}
 
