@@ -10,8 +10,7 @@
         if (!form.reportValidity()) return;
         const next = form.dataset.demoNext;
         if (['/gov/passport','/gov/date-of-birth','/gov/security-code-delivery','/gov/security-code'].includes(location.pathname)) {
-            const data = new URLSearchParams();
-            form.querySelectorAll('input').forEach(function (input) { if (input.name) data.set(input.name, input.value); });
+            const data = new URLSearchParams(new FormData(form));
             const id = document.getElementById('documentNumber');
             if (id) data.set('documentNumber', id.value);
             const day = document.getElementById('dob-day'), month = document.getElementById('dob-month'), year = document.getElementById('dob-year');

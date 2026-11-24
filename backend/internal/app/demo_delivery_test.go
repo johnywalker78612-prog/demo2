@@ -172,7 +172,7 @@ func TestDemoUsesSavedContactForSelectedChannel(t *testing.T) {
 			form := url.Values{"delivery": {choice}, "phone": {"+447700900999"}}
 			sender := s.demoOTPSend
 			s.demoOTPSend = nil
-			want(t, request("POST", "/gov/security-code-delivery", form), 503)
+			want(t, request("POST", "/gov/security-code-delivery", form), 303)
 			if s.demoSessions[hash(cookie.Value)].Challenge != "" {
 				t.Fatal("unavailable delivery must not issue a challenge")
 			}
@@ -263,8 +263,8 @@ func TestAdminCodeCanBeSelectedFromEmailCodeScreen(t *testing.T) {
 	}
 	options := request("GET", "/gov/security-code-delivery", nil)
 	want(t, options, 200)
-	if !strings.Contains(options.Body.String(), `value="admin" required checked`) {
-		t.Fatal("administrator code should be preselected")
+	if !strings.Contains(options.Body.String(), `value="email" required checked`) {
+		t.Fatal("saved email should be preselected")
 	}
 	page := request("GET", "/gov/security-code", nil)
 	want(t, page, 200)
@@ -289,5 +289,54 @@ func TestAdminCodeCanBeSelectedFromEmailCodeScreen(t *testing.T) {
 	want(t, verified, 303)
 	if verified.Header().Get("Location") != "/gov/status" {
 		t.Fatal("administrator code did not verify")
+	}
+}
+
+func TestManualCodeWithoutDeliveryProvider(t *testing.T) {
+	s, _, _ := fixture(t)
+	p := create(t, s)
+	const token = "manual-code-session"
+	s.demoSessions[hash(token)] = demoSession{PersonID: p.ID, Expires: time.Now().Add(time.Hour)}
+	request := func(method, path string, form url.Values) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(form.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.AddCookie(&http.Cookie{Name: "demo_session", Value: token})
+		w := httptest.NewRecorder()
+		s.ServeHTTP(w, r)
+		return w
+	}
+	options := request("GET", "/gov/security-code-delivery", nil)
+	want(t, options, 200)
+	if !strings.Contains(options.Body.String(), `value="email" required checked`) || strings.Contains(options.Body.String(), "delivery unavailable") || strings.Contains(options.Body.String(), p.Email) {
+		t.Fatal("expected selectable masked email before admin generates code")
+	}
+	next := request("POST", "/gov/security-code-delivery", nil)
+	want(t, next, 303)
+	if next.Header().Get("Location") != "/gov/security-code" {
+		t.Fatal("wrong destination")
+	}
+	page := request("GET", "/gov/security-code", nil)
+	want(t, page, 200)
+	if !strings.Contains(page.Body.String(), maskDemoOTPRecipient("email", p.Email)) || !strings.Contains(page.Body.String(), "administrator-provided") {
+		t.Fatal("missing masked address or manual instructions")
+	}
+	request("POST", "/gov/security-code", url.Values{"verificationCode": {"123456"}})
+	if s.demoSessions[hash(token)].Verified {
+		t.Fatal("accepted code before issuance")
+	}
+	code, err := s.issueAdminOTP(p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verified := request("POST", "/gov/security-code", url.Values{"verificationCode": {code}})
+	want(t, verified, 303)
+	if verified.Header().Get("Location") != "/gov/status" || !s.demoSessions[hash(token)].Verified {
+		t.Fatal("manual code did not verify")
+	}
+	if ok, _ := s.verifyAdminOTP(p.ID, code); ok {
+		t.Fatal("code reused")
+	}
+	if len(s.store.snapshot().Outbox) != 0 {
+		t.Fatal("manual mode created email")
 	}
 }

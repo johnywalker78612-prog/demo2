@@ -125,7 +125,6 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 
 		// Administrator OTP can authenticate through either
 		// the saved email address or the saved phone number.
-		adminCodeAvailable := s.hasAdminOTP(p.ID)
 
 		deliveryOptions = ""
 		defaultDelivery = ""
@@ -137,11 +136,8 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			sender := s.demoOTPSender(channel)
-
-			// Enable the option if normal delivery is configured
-			// OR an administrator OTP is available.
-			available := sender != nil || adminCodeAvailable
+			// A saved contact can also use an administrator-provided code.
+			available := true
 
 			selected := available && defaultDelivery == ""
 
@@ -166,6 +162,18 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 
 		if r.Method == http.MethodPost {
 			choice := strings.TrimSpace(r.PostFormValue("delivery"))
+			if choice == "" {
+				choice = defaultDelivery
+			}
+			if choice == "admin" {
+				se.CodeChannel = "admin"
+				se.CodeRecipient = ""
+				se.Challenge = ""
+				se.Verified = false
+				s.demoSessions[key] = se
+				http.Redirect(w, r, "/gov/security-code", http.StatusSeeOther)
+				return
+			}
 
 			recipient := demoOTPRecipient(p, choice)
 
@@ -178,10 +186,10 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 			sender := s.demoOTPSender(choice)
 
 			// ADMIN OTP FALLBACK:
-			// No email or SMS delivery is required when an
-			// administrator-generated OTP exists.
-			if sender == nil && adminCodeAvailable {
-				se.CodeChannel = choice
+			// Let users enter an administrator code without a delivery provider.
+			// The administrator may generate the code after this page is opened.
+			if sender == nil {
+				se.CodeChannel = "admin"
 				se.CodeRecipient = recipient
 				se.Challenge = ""
 				se.CodeExpires = time.Time{}
@@ -197,12 +205,6 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 					http.StatusSeeOther,
 				)
 				return
-			}
-
-			if sender == nil {
-				responseStatus = http.StatusServiceUnavailable
-				demoError = "Delivery through that channel is unavailable."
-				break
 			}
 
 			now := time.Now()
@@ -266,6 +268,9 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 
 			codeChannel = "admin"
 			codeDestination = "your administrator"
+			if recipient := demoOTPRecipient(s.store.snapshot().People[se.PersonID], "email"); recipient != "" {
+				codeDestination = maskDemoOTPRecipient("email", recipient)
+			}
 
 			if r.Method == http.MethodPost {
 
@@ -406,7 +411,7 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Path == "/gov/security-code" {
 		if codeChannel == "admin" {
-			content = bytes.ReplaceAll(content, []byte("We requested a single-use, 6-digit security code for:"), []byte("Enter the single-use code provided by:"))
+			content = bytes.ReplaceAll(content, []byte("We requested a single-use, 6-digit security code for:"), []byte("Enter the administrator-provided code for:"))
 			content = bytes.ReplaceAll(content, []byte("It may take a few minutes to arrive. You need to use this code within 10 minutes or it will expire."), []byte("Administrator codes expire 24 hours after they are generated."))
 			content = bytes.ReplaceAll(content, []byte(`<form action="/gov/security-code-delivery" method="post">`), []byte(`<form action="/gov/security-code-delivery" method="post" hidden>`))
 		}

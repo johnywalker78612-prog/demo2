@@ -266,7 +266,7 @@ func (s *Server) portalRoutes() {
 	}
 	s.mux.HandleFunc("POST /admin/people/{id}/sign-in-code", s.portalAuth(func(w http.ResponseWriter, r *http.Request, se session) {
 		person, exists := s.store.snapshot().People[r.PathValue("id")]
-		if !s.cfg.LocalOTPOutbox || !exists {
+		if !exists {
 			http.NotFound(w, r)
 			return
 		}
@@ -488,7 +488,7 @@ func (s *Server) renderPersonDetails(w http.ResponseWriter, se session, p Person
 	data.Title = title
 	data.View = "person"
 	data.Person = p
-	data.AdminOTPEnabled = s.cfg.LocalOTPOutbox && p.ID != ""
+	data.AdminOTPEnabled = p.ID != ""
 	data.HideEntriesAllowed = isSkilledWorkerStatus(recordedStatus)
 	data.Fields = f
 	data.Shares = shares
