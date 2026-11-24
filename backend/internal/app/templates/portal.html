@@ -109,7 +109,7 @@
             aria-label="Monthly additions. Exact counts are available in the monthly breakdown below.">{{range
             .Report.Monthly}}<div class="bar-column"><span class="bar-count">{{.Added}}</span>
               <div class="bar-track">
-                <div class="bar" style="height:{{.Height}}%"></div>
+                <div class="bar" {{barHeight .Height}}></div>
               </div><span class="bar-label">{{.Label}}</span>
             </div>{{end}}</div>
         </div>
@@ -243,12 +243,7 @@
         </div>{{end}}<p>Use “Replace photo” in the details form to attach and crop a new image.</p>
         <h2>Email ownership</h2>
         <p>{{if .Person.EmailVerifiedAt}}Email ownership confirmed. Record details remain unverified.{{else}}Email not
-          verified.{{end}}</p>{{if .AdminOTPEnabled}}<div id="admin-sign-in-code">
-          <form action="/admin/people/{{.Person.ID}}/sign-in-code#admin-sign-in-code" method="post"><input type="hidden"
-              name="csrf" value="{{.CSRF}}"><button>Generate 24-hour sign-in code</button></form>{{if .AdminOTPCode}}<p
-            role="status"><strong>Sign-in code</strong> <code>{{.AdminOTPCode}}</code><br>Valid for 24 hours and one
-            sign-in.</p>{{end}}
-        </div>{{end}}<form action="/admin/people/{{.Person.ID}}/verify-email" method="post"><input type="hidden"
+          verified.{{end}}</p>{{if .AdminOTPEnabled}}<div id="admin-sign-in-code"><h2>Security code</h2>{{if .SavedSecurityCode}}<p class="notice">Saved security code: <strong><code>{{.SavedSecurityCode}}</code></strong></p>{{else if .AdminCodeSet}}<p class="notice">This code was saved before code display was available. Save the code again below to display it here.</p>{{end}}<p>{{if .AdminCodeSet}}A security code is set. Leave this form unchanged to keep it.{{else}}Set a six-digit security code for this person.{{end}}</p><form action="/admin/people/{{.Person.ID}}/sign-in-code#admin-sign-in-code" method="post"><input type="hidden" name="csrf" value="{{.CSRF}}"><label for="security-code">{{if .AdminCodeSet}}New security code{{else}}Security code{{end}}</label><input id="security-code" name="security_code" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="new-password" required aria-describedby="security-code-help"><p id="security-code-help">Use exactly six digits. This code works for repeated sign-ins and stays valid until you replace it.</p><button>Save security code</button></form></div>{{end}}<form action="/admin/people/{{.Person.ID}}/verify-email" method="post"><input type="hidden"
             name="csrf" value="{{.CSRF}}"><button>Create verification message</button></form><small>Create and preview a
           message in the email outbox, then send when SMTP is configured.</small>
         <div class="danger-zone">

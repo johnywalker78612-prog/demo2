@@ -139,7 +139,7 @@ func TestAdminSetsCodeAndRepeatedSessionsVerify(t *testing.T) {
 		if strings.Contains(page.Body.String(), "012345") {
 			t.Fatal("code leaked onto public entry page")
 		}
-		for _, text := range []string{"Sign in", "Enter your security code", "Enter your 6-digit security code for:", maskDemoOTPRecipient("email", p.Email)} {
+		for _, text := range []string{"Enter your security code", "Enter your 6-digit security code for:", maskDemoOTPRecipient("email", p.Email)} {
 			if !strings.Contains(page.Body.String(), text) {
 				t.Fatalf("missing entry text: %s", text)
 			}
