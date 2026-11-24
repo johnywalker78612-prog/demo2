@@ -123,30 +123,13 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Check whether an administrator-generated OTP exists
-		// for this particular client.
+		// Administrator OTP can authenticate through either
+		// the saved email address or the saved phone number.
 		adminCodeAvailable := s.hasAdminOTP(p.ID)
 
-		if adminCodeAvailable {
-			defaultDelivery = "admin"
+		deliveryOptions = ""
+		defaultDelivery = ""
 
-			deliveryOptions = `<div class="osmuk-radios__item">
-            <input class="osmuk-radios__input"
-                type="radio"
-                id="delivery-admin"
-                name="delivery"
-                value="admin"
-                required
-                checked>
-            <label class="osmuk-label osmuk-radios__label"
-                for="delivery-admin">
-                Use a code from your administrator
-            </label>
-        </div>`
-		}
-
-		// Email and SMS are optional.
-		// They should only be enabled when an actual sender is configured.
 		for _, channel := range []string{"email", "sms"} {
 			recipient := demoOTPRecipient(p, channel)
 
@@ -154,7 +137,11 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			available := s.demoOTPSender(channel) != nil
+			sender := s.demoOTPSender(channel)
+
+			// Enable the option if normal delivery is configured
+			// OR an administrator OTP is available.
+			available := sender != nil || adminCodeAvailable
 
 			selected := available && defaultDelivery == ""
 
@@ -172,26 +159,33 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 
 		if deliveryOptions == "" {
 			deliveryOptions = `<p class="osmuk-body">
-            No administrator-generated code or delivery method
-            is currently available for this record.
+            No valid contact details or verification method
+            are available for this record.
         </p>`
 		}
 
 		if r.Method == http.MethodPost {
 			choice := strings.TrimSpace(r.PostFormValue("delivery"))
 
-			// ADMIN OTP FLOW
-			if choice == "admin" {
-				if !adminCodeAvailable {
-					responseStatus = http.StatusUnprocessableEntity
-					demoError = "No valid administrator code is available for this record."
-					break
-				}
+			recipient := demoOTPRecipient(p, choice)
 
-				se.CodeChannel = "admin"
-				se.CodeRecipient = ""
+			if recipient == "" {
+				responseStatus = http.StatusUnprocessableEntity
+				demoError = "Choose a valid email address or mobile number."
+				break
+			}
+
+			sender := s.demoOTPSender(choice)
+
+			// ADMIN OTP FALLBACK:
+			// No email or SMS delivery is required when an
+			// administrator-generated OTP exists.
+			if sender == nil && adminCodeAvailable {
+				se.CodeChannel = choice
+				se.CodeRecipient = recipient
 				se.Challenge = ""
 				se.CodeExpires = time.Time{}
+				se.CodeAttempts = 0
 				se.Verified = false
 
 				s.demoSessions[key] = se
@@ -205,20 +199,9 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			// EMAIL / SMS FLOW
-			recipient := demoOTPRecipient(p, choice)
-
-			if recipient == "" {
-				responseStatus = http.StatusUnprocessableEntity
-				demoError = "Choose a valid email address or mobile number."
-				break
-			}
-
-			sender := s.demoOTPSender(choice)
-
 			if sender == nil {
 				responseStatus = http.StatusServiceUnavailable
-				demoError = "Delivery through that channel is unavailable. Choose another option."
+				demoError = "Delivery through that channel is unavailable."
 				break
 			}
 
@@ -261,6 +244,7 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 
 			se = nextSession
 			se.CodeChannel = choice
+
 			s.demoSessions[key] = se
 
 			http.Redirect(
@@ -323,30 +307,54 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/gov/passport", http.StatusSeeOther)
 			return
 		}
-		canUseAdminCode := se.CodeChannel == "email" && !s.cfg.SMTP.enabled() && s.hasAdminOTP(se.PersonID)
+		// canUseAdminCode := se.CodeChannel == "email" && !s.cfg.SMTP.enabled() && s.hasAdminOTP(se.PersonID)
+		canUseAdminCode := s.hasAdminOTP(se.PersonID)
 		if (se.Challenge == "" || !time.Now().Before(se.CodeExpires)) && !canUseAdminCode {
 			http.Redirect(w, r, "/gov/security-code-delivery", http.StatusSeeOther)
 			return
 		}
 		codeDestination = maskDemoOTPRecipient(se.CodeChannel, se.CodeRecipient)
 		codeChannel = se.CodeChannel
+
 		if r.Method == http.MethodPost {
-			code := strings.TrimSpace(r.PostFormValue("verificationCode"))
+			code := strings.TrimSpace(
+				r.PostFormValue("verificationCode"),
+			)
+
+			// First try the normal email/SMS OTP.
 			verified := se.verifyDemoOTP(key, code, time.Now())
-			if !verified && canUseAdminCode {
-				verified, _ = s.verifyAdminOTP(se.PersonID, code)
+
+			// If normal verification fails, try the administrator OTP.
+			// This works for both email and SMS selections.
+			if !verified && s.hasAdminOTP(se.PersonID) {
+				adminVerified, err := s.verifyAdminOTP(
+					se.PersonID,
+					code,
+				)
+
+				verified = err == nil && adminVerified
 			}
+
 			if !verified {
-				demoError = "Invalid or expired security code."
+				demoError = "Invalid, expired, or already used security code."
 				s.demoSessions[key] = se
 				break
 			}
+
 			se.Challenge = ""
 			se.Verified = true
+
 			s.demoSessions[key] = se
-			http.Redirect(w, r, "/gov/status", http.StatusSeeOther)
+
+			http.Redirect(
+				w,
+				r,
+				"/gov/status",
+				http.StatusSeeOther,
+			)
 			return
 		}
+
 	case "/gov/photo":
 		if !se.Verified {
 			http.NotFound(w, r)
@@ -377,22 +385,16 @@ func (s *Server) demoFlow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.URL.Path == "/gov/security-code-delivery" {
-		buttonState := "disabled"
 
 		if defaultDelivery != "" {
-			buttonState = ""
+			content = enableDemoSubmitButton(content)
 		}
 
-		content = bytes.ReplaceAll(
-			content,
-			[]byte(`data-otp-submit`),
-			[]byte(buttonState),
-		)
-
 		if demoError != "" {
-			deliveryOptions = `<p class="osmuk-body" role="alert">` +
-				template.HTMLEscapeString(demoError) +
-				"</p>" + deliveryOptions
+			deliveryOptions =
+				`<p class="osmuk-body" role="alert">` +
+					template.HTMLEscapeString(demoError) +
+					"</p>" + deliveryOptions
 		}
 
 		content = bytes.ReplaceAll(
@@ -542,4 +544,20 @@ func renderDemoIdentityMismatch(w http.ResponseWriter, documentNumber, dob strin
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'")
 	w.WriteHeader(http.StatusUnprocessableEntity)
 	_, _ = w.Write(body.Bytes())
+}
+
+func enableDemoSubmitButton(content []byte) []byte {
+	buttonRegex := regexp.MustCompile(`(?is)<button\b[^>]*>`)
+
+	disabledRegex := regexp.MustCompile(
+		`(?i)\s+disabled(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?`,
+	)
+
+	return buttonRegex.ReplaceAllFunc(content, func(button []byte) []byte {
+		if !bytes.Contains(button, []byte(`id="submit"`)) {
+			return button
+		}
+
+		return disabledRegex.ReplaceAll(button, nil)
+	})
 }

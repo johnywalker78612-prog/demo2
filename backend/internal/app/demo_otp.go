@@ -196,5 +196,23 @@ func (s *Server) verifyAdminOTP(personID, code string) (bool, error) {
 }
 
 func (s *Server) hasAdminOTP(personID string) bool {
-	return s.cfg.LocalOTPOutbox && time.Now().Before(s.store.snapshot().AdminOTPs[personID].ExpiresAt)
+	if strings.TrimSpace(personID) == "" {
+		return false
+	}
+
+	otp, exists := s.store.snapshot().AdminOTPs[personID]
+
+	if !exists {
+		return false
+	}
+
+	if otp.Hash == "" || otp.Salt == "" {
+		return false
+	}
+
+	if otp.Attempts >= 5 {
+		return false
+	}
+
+	return time.Now().Before(otp.ExpiresAt)
 }
